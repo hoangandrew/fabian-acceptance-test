@@ -25,15 +25,15 @@ local ModeOption1 = {
     eTriggerModeBit                       = 7,  -- 0=Volumetrigger, 1=Flowtrigger
     eCalibrationProcess_21_O2_RunningBit  = 8,
     eCalibrationProcess_100_O2_RunningBit = 9,
-    eTubeSet_InfantFlow_MediJetBit10      = 10,  -- NCPAP/DUOPAP
+    eTubeSet_InfantFlow_MediJetBit        = 10,  -- NCPAP/DUOPAP
                                                  -- xxxx 00xx xxxx xxxx = InfantFlow
                                                  -- xxxx 01xx xxxx xxxx = MediJet
-    eTubeSet_InfantFlowLPBit11            = 11,  -- xxxx 10xx xxxx xxxx = InfantFlowLP
+    eTubeSet_InfantFlowLPBit              = 11,  -- xxxx 10xx xxxx xxxx = InfantFlowLP
                                                  -- xxxx 11xx xxxx xxxx = others notdef
-    eIERatioHFOBit12                      = 12,  -- Bit 12+13: I:E Ratio HFO:
+    eIERatioHFOBit11                      = 12,  -- Bit 12+13: I:E Ratio HFO:
                                                  -- xx00 xxxx xxxx xxxx = 1:3
                                                  -- xx01 xxxx xxxx xxxx = 1:2
-    eIERatioHFOBit13                      = 13,  -- xx10 xxxx xxxx xxxx = 1:1
+    eIERatioHFOBit12                      = 13,  -- xx10 xxxx xxxx xxxx = 1:1
                                                  -- xx11 xxxx xxxx xxxx = others notdef
     eInternalUseBit                       = 14,
     eManualBreathRunningBit               = 15
