@@ -8,7 +8,7 @@ fti = require "FTI-define"
 -- Tests fabian Terminal Interface defined in FTI-define
 ----------------------------------------------------------------------------------------
 
-function verify_VentModeRange()
+function test_VentModeRange()
     local minMode = 1
 	local maxMode = 10
     
@@ -19,8 +19,8 @@ function verify_VentModeRange()
 	assert(isServiceMode, 'ASSERT: Invalid Service Mode')
 end
 
-function verify_VentModes()
-    verify_VentModeRange()
+function test_VentModes()
+    test_VentModeRange()
 	local expectedMode = {
         eNONE      =  0,
         eIPPV      =  1,
@@ -52,7 +52,7 @@ end
 ----------------------------------------------------------------------------------------
 -- Call function tests
 ----------------------------------------------------------------------------------------
-verify_VentModeRange()
-verify_VentModes()
+test_VentModeRange()
+test_VentModes()
 
 
