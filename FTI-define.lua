@@ -1,3 +1,9 @@
+------------------------------------------------------------------------------
+-- (c) Copyright 2019 Vyaire Medial, or one of its subsidiaries.
+--     All Rights Reserved.
+------------------------------------------------------------------------------
+-- Define fabian Terminal Interface
+----------------------------------------------------------------------------------------
 
 local ventMode = {
     eNONE      =  0,
@@ -19,7 +25,7 @@ local ModeOption1 = {
     eStateVolumnGuaranteeBit              = 1,  -- 0=off, 1=on
     eStateVolumnLimitBit                  = 2,  -- 0=off, 1=on
     eVentilatorRangeBit                   = 3,  -- 0=NEONATAL, 1=PEDIATRIC
-    eFlowSensorCalibrationRunningBit      = 4, 
+    eFlowSensorCalibrationRunningBit      = 4,
     eO2CompensationEnabledBit             = 5,
     eExhalationValveCalibrationRunningBit = 6,
     eTriggerModeBit                       = 7,  -- 0=Volumetrigger, 1=Flowtrigger
@@ -59,7 +65,7 @@ local ModeOption2 = {
                                             -- 11xx xxxx xxxx = high
 }
 
-local cmd_get_VentSettings = {
+local para_get_VentSettings = {
     eTERMINAL_GET_VENT_RUNSTATE           = 0x09,
     eTERMINAL_GET_STATE_VLimit            = 0x0A,
     eTERMINAL_GET_STATE_VGarant           = 0x0B,
@@ -105,7 +111,7 @@ local cmd_get_VentSettings = {
     eTERMINAL_GET_STATE_PRICO             = 0x33,
 }
 
-local cmd_set_settingData = {
+local para_set_settingData = {
     eTERMINAL_SET_VENT_RUNSTATE           = 0x55,
     eTERMINAL_SET_STATE_VLimit            = 0x56,
     eTERMINAL_SET_STATE_VGarant           = 0x57,
@@ -116,7 +122,6 @@ local cmd_set_settingData = {
     eTERMINAL_SET_PARAM_HFOFreqRec        = 0x5C,
     eTERMINAL_SET_PARAM_HFOFlow           = 0x5D,
     eTERMINAL_SET_LeakCompensation        = 0x5E,
-    --not used                            = 0x5F,
     eTERMINAL_SET_PARAM_PINSP             = 0x60,
     eTERMINAL_SET_PARAM_PEEP              = 0x61,
     eTERMINAL_SET_PARAM_PPSV              = 0x62,
@@ -150,10 +155,113 @@ local cmd_set_settingData = {
     eTERMINAL_SET_STATE_PRICO             = 0x7F,
 }
 
+local para_measure_response = {
+    eNone                     =  0,
+    eActiveVentMode           =  1,
+    ePmax_HIBYTE              =  2,  -- Peak Pressure
+    ePmax_LOBYTE              =  3,
+    ePmitt_HIBYTE             =  4,  -- Mean Pressure
+    ePmitt_LOBYTE             =  5,
+	ePEEP_HIBYTE              =  6,  -- PEEP
+	ePEEP_LOBYTE              =  7,
+	eDynamicCompliance_HIBYTE =  8,  -- Dynamic Compliance
+	eDynamicCompliance_LOBYTE =  9,
+    eC20C_HIBYTE              = 10,  -- Overextension Index C20/C
+    eC20C_LOBYTE              = 11,
+	eResistance_HIBYTE        = 12,  -- Ventilatory Resistance
+	eResistance_LOBYTE        = 13,
+    eMV_HIBYTE                = 14,  -- Minute Volume
+	eMV_LOBYTE                = 15,
+    eTVI_HIBYTE               = 16,  -- Insp. Mand. Tidal Volume
+    eTVI_LOBYTE               = 17,
+    eTVE_HIBYTE               = 18,  -- Exp. Mand. Tidal Volume
+    eTVE_LOBYTE               = 19,
+	eTVEresp_HIBYTE           = 20,  -- Exp. Mand. TV Respirator
+	eTVEresp_LOBYTE           = 21,
+	eTVEpat_HIBYTE            = 22,  -- Exp. Mand. TV Patient
+	eTVEpat_LOBYTE            = 23,
+	eHFAmpl_HIBYTE            = 24,  -- HF Amplitude
+	eHFAmpl_LOBYTE            = 25,
+	eTVEHFO_HIBYTE            = 26,  -- HF Exp. Mand. Tidal Volume
+	eTVEHFO_LOBYTE            = 27,
+	eDCO2_HIBYTE              = 28,  -- Gas Transport Coefficient
+	eDCO2_LOBYTE              = 29,
+	eTrigVol_HIBYTE           = 30,  -- Trigger Volume/Trigger Flow
+	eTrigVol_LOBYTE           = 31,
+	eITimePSV_HIBYTE          = 32,  -- Inspiratory Time PSV
+	eITimePSV_LOBYTE          = 33,
+	eSPO2_HIBYTE              = 34,  -- SPO2
+	eSPO2_LOBYTE              = 35,
+	ePulseRate_HIBYTE         = 36,  -- Pulse Rate
+	ePulseRate_LOBYTE         = 37,
+	ePerfusionIndex_HIBYTE    = 38,  -- Perfusion Index
+	ePerfusionIndex_LOBYTE    = 39,
+	eETCO2_HIBYTE             = 40,  -- ETCO2
+	eETCO2_LOBYTE             = 41,
+	eBPM_HIBYTE               = 42,  -- Respiratory Rate
+	eBPM_LOBYTE               = 43,
+	eBPMco2_HIBYTE            = 44,  -- Respiratory Rate etCO2 Module
+	eBPMco2_LOBYTE            = 45,
+	eLeak_HIBYTE              = 46,  -- Leakage
+	eLeak_LOBYTE              = 47,
+	eHFFreq_HIBYTE            = 48,  -- HF Rate
+	eHFFreq_LOBYTE            = 49,
+	ePercent_HIBYTE           = 50,  -- Share MV Respirator
+	ePercent_LOBYTE           = 51,
+	eOxyVal_HIBYTE            = 52,  -- FiO2
+	eOxyVal_LOBYTE            = 53,
+	eINSP_FLOW_HIBYTE         = 54,  -- Inspiratory Flow
+	eINSP_FLOW_LOBYTE         = 55,
+	eEXP_FLOW_HIBYTE          = 56,  -- Expiratory Flow
+	eEXP_FLOW_LOBYTE          = 57,
+	eDEMAND_FLOW_HIBYTE       = 58,  -- Demand Flow
+	eDEMAND_FLOW_LOBYTE       = 59,
+}
+
+local para_get_waveData = {
+    eValPressure_HIBYTE = 1,
+    eValPressure_LOBYTE = 2,
+    eValFlow_HIBYTE     = 3,
+    eValFlow_LOBYTE     = 4,
+    eValCO2_HIBYTE      = 5,
+    eValCO2_LOBYTE      = 6,
+}
+
+local command = {
+    TERM_STOP_CONTINIOUS_MEASUREMENTS    = 0x50,
+    TERM_STOP_WAVE_DATA                  = 0x51,
+    TERM_MSG_SOM                         = 0x02,
+    TERM_PARAM_NOSUPPORT                 = 0xFD,
+    TERM_PARAM_OUTOFFRANGE               = 0xFF,
+    TERM_GET_MEASUREMENTS_ONCE_BTB       = 0x00,
+    TERM_GET_MEASUREMENTS_CONTINIOUS_BTB = 0x01,
+    TERM_GET_MEASUREMENTS_ONCE_AVG       = 0x02,
+    TERM_GET_MEASUREMENTS_CONTINIOUS_AVG = 0x03,
+    TERM_MEASUREMENTS_BTB                = 0x00,
+    TERM_MEASUREMENTS_AVG                = 0x02,
+    TERM_GET_WAVE_DATA                   = 0x04,
+    TERM_GET_VENT_MODE                   = 0x05,
+    TERM_GET_MODE_OPTION1                = 0x06,
+    TERM_GET_MODE_OPTION2                = 0x07,
+    TERM_STOP_CONTINIOUS_MEASUREMENTS    = 0x50,
+    TERM_STOP_WAVE_DATA                  = 0x51,
+    TERM_MEASUREMENTS_BTB                = 0x00,
+    TERM_MEASUREMENTS_AVG                = 0x02,
+    TERM_WAVE_DATA                       = 0x04,
+    TERM_VENT_MODE                       = 0x05,
+    TERM_MODE_OPTION1                    = 0x06,
+    TERM_MODE_OPTION2                    = 0x07,
+}
+--------------------------------------------------------------------------------
+-- Publish Public Interface
+--------------------------------------------------------------------------------
 FTI = {
-    ventMode             = ventMode,
-    ModeOption1          = ModeOption1,
-    ModeOption2          = ModeOption2,
-    cmd_get_VentSettings = cmd_get_VentSettings,
-    cmd_set_settingData  = cmd_set_settingData,	
+    ventMode                             = ventMode                            ,
+    ModeOption1                          = ModeOption1                         ,
+    ModeOption2                          = ModeOption2                         ,
+    para_get_VentSettings                = para_get_VentSettings               ,
+    para_set_settingData                 = para_set_settingData                ,
+	para_measure_response                = para_measure_response               ,
+	para_get_waveData                    = para_get_waveData                   ,
+	command                              = command                             ,
 }
