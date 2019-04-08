@@ -15,8 +15,8 @@ local sd      = FTI.para_set_settingData
 local cmd     = FTI.command
 local range   = FTI.range
 local mdScale = FTI.measuredData_ScaleFactor
-local mr = FTI.para_measure_response
-
+local mr      = FTI.para_measure_response
+local DEBUG   = 0
 -------------------------------
 local ft = {}
 local p, e, NBF, CMD = nil
@@ -40,7 +40,6 @@ local function roundDown(xNumber)
     end
     return result
 end
-
 
 local function SplitNumberIntoHiAndLowBytes(xNumber) 
     local lowByte = xNumber % 256
@@ -109,7 +108,7 @@ function ft.readVentBreath()
     local err, dataRead = p:read(read_len, timeout__ms)
     local breathData = {}
     local cmdRead = getByteValue(dataRead,3)
-    print (tohex(dataRead))
+    if (DEBUG ~= 0) then print (tohex(dataRead)) end
     assert(e == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then
         cmdRead = getByteValue(dataRead,3)
@@ -151,15 +150,15 @@ end
 -- note: this applies to the continuous wave function 
 function ft.readVentWave()
     local err, dataRead = p:read(read_len, timeout__ms)
-    local breathData = {}
+    local wave = {}
     assert(e == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
-    print (tohex(dataRead))
-	    wd = FTI.para_get_waveData
-        breathData.wavePressure = getSignedShort(dataRead,wd.Pressure) / mdScale.Pressure
-        breathData.waveFlow     = getSignedShort(dataRead,wd.Flow    ) / mdScale.Flow
-        breathData.waveETCO2    = getSignedShort(dataRead,wd.etCO2   ) / mdScale.etCO2
-        return cmdRead, breathData
+        if (DEBUG ~= 0) then print (tohex(dataRead)) end
+        wd = FTI.para_get_waveData
+        wave.Pressure = getSignedShort(dataRead,wd.Pressure) / mdScale.Pressure
+        wave.Flow     = getSignedShort(dataRead,wd.Flow    ) / mdScale.Flow
+        wave.etCO2    = getSignedShort(dataRead,wd.etCO2   ) / mdScale.etCO2 
+        return cmdRead, wave
     end
 end
 
@@ -182,8 +181,9 @@ function writeToSerial(xCommand, xDataByte1, xDataByte2)
             local checkSum = numberBytes + xCommand
             p:write(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand,
                                 oneByteChecksum(checkSum)), timeout__ms)
-                                print (tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand,
-                                oneByteChecksum(checkSum)), timeout__ms))
+            if (DEBUG ~= 0) then 
+			    print (tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, oneByteChecksum(checkSum)), timeout__ms))
+			end
         elseif xDataByte2 == nil then
             local numberBytes = 0x3
             local checkSum = numberBytes + xCommand + xDataByte1
@@ -207,7 +207,7 @@ function ft.openCOM()
         assert(p:set_parity(rs232.RS232_PARITY_NONE) == rs232.RS232_ERR_NOERROR)
         assert(p:set_stop_bits(rs232.RS232_STOP_1) == rs232.RS232_ERR_NOERROR)
         assert(p:set_flow_control(rs232.RS232_FLOW_OFF)  == rs232.RS232_ERR_NOERROR)
-        print("OK, port open with values " .. tostring(p))
+        if (DEBUG ~= 0) then print("OK, port open with values " .. tostring(p)) end
     else
         print("Can't open serial port " .. portName .. " error: " .. rs232.error_tostring(e))
     end
@@ -359,7 +359,7 @@ end
 
 function ft.setPSV(xPPSV__mbar)
     if (xPPSV__mbar >= range.PPSVMIN and xPPSV__mbar <= range.PPSVMAX) then 
-        local ppsvScaled = xPPSV__mbar * mdScale.PPSV
+        local ppsvScaled = xPPSV__mbar * mdScale.PPSVS
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ppsvScaled)
         writeToSerial(sd.TERMINAL_SET_PARAM_PPSV, highByte, lowByte)
         modeError()
@@ -611,7 +611,7 @@ function ft.setFIO2Low(xFIO2Low)
 end
 
 function ft.setFIO2High(xFIO2High)
-    if (xSPO2High >= range.FIO2HighMIN and xSPO2High <= range.FIO2HighMAX) then 
+    if (xFIO2High >= range.FIO2HighMIN and xFIO2High <= range.FIO2HighMAX) then 
         writeToSerial(sd.TERMINAL_SET_PARAM_FIO2HIGH, xFIO2High)
         modeError()
     else print ("Out of range.")
@@ -655,7 +655,7 @@ function ft.getContinousBTB(xIterations)
     for  i = 1,   xIterations do
         print ("---------------------------------------")
         -- ft.delay_sec(1.4) --we need this delay here for the vent to send all the data
-		delay_sec(1.4)
+        delay_sec(1.4)
         cmdRead, breathData = ft.readVentBreath()
         if (cmdRead == 0) then
             for k, v in pairs(breathData) do
@@ -715,14 +715,13 @@ end
 -------------------------------------------------------
 function ft.getContinousWaveData(xIterations)
     writeToSerial(cmd.TERM_STOP_WAVE_DATA)
-    writeToSerial(cmd.TERM_GET_WAVEDATA)
-    local cmdRead, breathData = nil
+    writeToSerial(cmd.TERM_GET_WAVE_DATA)
+    local cmdRead, wave = nil
     for  i = 1,   xIterations do
         print ("---------------------------------------")
-        ft.delay_sec(.4) --we need this delay here for the vent to send all the data
-        cmdRead, breathData = ft.readVentWave()
-        if breathData ~= nil then
-            for k, v in pairs(breathData) do
+        cmdRead, wave = ft.readVentWave()
+        if wave ~= nil then
+            for k, v in pairs(wave) do
                 if (v == range.MissingValueLOW or 
                     v == range.MissingValueMID or 
                     v == range.MissingValueHIGH )then
@@ -734,12 +733,27 @@ function ft.getContinousWaveData(xIterations)
     end
     writeToSerial(cmd.TERM_STOP_WAVE_DATA)
 end
--------------------------------------------------------
 
+-------------------------------------------------------
+function ft.getWaveData(xIterations)
+    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
+    writeToSerial(cmd.TERM_GET_WAVE_DATA)
+	print('wavePressure, waveFlow, waveETCO2')
+    for  i = 1,   xIterations do
+        local cmdRead, wave = ft.readVentWave()
+		local scale = FTI.measuredData_ScaleFactor.etCO2
+        if wave ~= nil then
+            print(wave.Pressure .. ', ' .. wave.Flow .. ', ' .. wave.etCO2 )
+        end
+    end
+    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
+end
+
+-------------------------------------------------------
 function ft.getVentMode()
-    writeToSerial(vs.TERMINAL_GET_VENT_MODE)
+    writeToSerial(cmd.TERM_GET_VENT_MODE)
     local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_VENT_MODE)) then
+    if (cmdUsed == tonumber(cmd.TERM_GET_VENT_MODE)) then
         if (data >= range.modeMIN or data <= range.modeMAX) then
             return data
         else print("An error has occured")
@@ -924,7 +938,7 @@ end
 function ft.getPPSV()
     writeToSerial(vs.TERMINAL_GET_PARAM_PPSV)
     local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.PPSV
+    local scaledData = data / mdScale.PPSVS
     if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PPSV)) then
         if (scaledData >= range.PPSVMIN and scaledData <= range.PPSVMAX) then
             return scaledData   
@@ -1160,7 +1174,7 @@ function ft.getPManuel()
     if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PManual)) then
         if (scaledData >= range.PManuelMIN and scaledData <= range.PManuelMAX) then
             return scaledData   
-        else print("An error has occured")
+        else print("An error has occured getPManuel")
         end
     end 
 end
