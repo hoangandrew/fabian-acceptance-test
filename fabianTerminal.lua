@@ -5,7 +5,7 @@
 -- fabian Terminal Interface library
 ------------------------------------------------------------------------------
 
-fti = require "FTI-define"
+fti = require "FTIDefine"
 rs232 = require 'luars232'
 local portName = "COM6"
 

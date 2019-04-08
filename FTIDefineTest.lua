@@ -5,7 +5,7 @@
 -- Tests fabian Terminal Interface defined in FTI-define
 ----------------------------------------------------------------------------------------
 
-fti = require "FTI-define"
+fti = require "FTIDefine"
 
 local function EXPECT_EQ(xValue, xExpected, xMsg)
     assert(xValue == xExpected, 'ASSERT: ' .. xMsg .. '. Value is ' .. tonumber(xValue) .. ', expected ' .. tonumber(xExpected))
