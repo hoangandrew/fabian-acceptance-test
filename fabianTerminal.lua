@@ -16,18 +16,26 @@ local cmd     = FTI.command
 local range   = FTI.range
 local mdScale = FTI.measuredData_ScaleFactor
 local mr      = FTI.para_measure_response
-local DEBUG   = 0
+local DEBUG   = false
 -------------------------------
 local ft = {}
 local p, e, NBF, CMD = nil
 local timeout__ms = 600
 local read_len = 63 -- read one byte
-
+local time_400ms = 0.4
    
 local function delay_sec(xSecond)  
     local clock = os.clock
     local t0 = clock()
     while (clock() - t0) <= xSecond do end
+end
+
+function ft.delay()
+    delay_sec(time_400ms)
+end
+
+local function printDebug(msg)
+    if (DEBUG ~= false) then print(msg) end 
 end
 
 
@@ -84,21 +92,22 @@ function modeError()
     end
 end
 
--- this function reads the data coming from the vent, splits it into
--- which command the vent read, and the data
--- in addition, this function returns all data read by the vent if needed
+-- this function:
+--     1. reads the data coming from the vent
+--     2. splits it into which command the vent read and the data in addition
+--     3. returns all data read from the vent
 function ft.readVentData()
     local err, dataRead = p:read(read_len, timeout__ms)
     assert(e == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
         local cmdRead = getByteValue(dataRead,3)
-            if getByteValue(dataRead,2) == 3 then 
-                return cmdRead, getByteValue(dataRead,4) , dataRead
-            elseif getByteValue(dataRead,2) == 4 then 
-                return cmdRead, getUnsignedShort(dataRead,4) , dataRead
-            else 
-                return cmdRead, tonumber("0xFFFF") 
-            end
+        if getByteValue(dataRead,2) == 3 then 
+            return cmdRead, getByteValue(dataRead,4) , dataRead
+        elseif getByteValue(dataRead,2) == 4 then 
+            return cmdRead, getUnsignedShort(dataRead,4) , dataRead
+        else 
+            return cmdRead, tonumber("0xFFFF") 
+        end
     end 
 end
 
@@ -170,36 +179,46 @@ local function oneByteChecksum (xCheckSum)
     return xCheckSum
 end
 
-
-
 -- This function dictates the 'number of bytes' value by checking
 -- how much data we intend to send to the vent
 function writeToSerial(xCommand, xDataByte1, xDataByte2)    
     if p ~= nil then
+        local numberBytes = 0x2
+        local checkSum = numberBytes + xCommand
         if xDataByte1 == nil then
-            local numberBytes = 0x2
-            local checkSum = numberBytes + xCommand
-            p:write(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand,
-                                oneByteChecksum(checkSum)), timeout__ms)
-            if (DEBUG ~= 0) then 
-			    print (tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, oneByteChecksum(checkSum)), timeout__ms))
-			end
+            p:write(string.char(cmd.TERM_MSG_SOM, 
+                                numberBytes, 
+                                xCommand,
+                                oneByteChecksum(checkSum)), 
+                                timeout__ms)
+            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand,oneByteChecksum(checkSum))))
         elseif xDataByte2 == nil then
-            local numberBytes = 0x3
-            local checkSum = numberBytes + xCommand + xDataByte1
-            p:write(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1,
-                                oneByteChecksum(checkSum)), timeout__ms)
+            numberBytes = 0x3
+            checkSum = numberBytes + xCommand + xDataByte1
+            p:write(string.char(cmd.TERM_MSG_SOM, 
+                                numberBytes, 
+                                xCommand, 
+                                xDataByte1,
+                                oneByteChecksum(checkSum)), 
+                                timeout__ms)
+            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, oneByteChecksum(checkSum)))) 
         else
-            local numberBytes = 0x4
-            local checkSum = numberBytes + xCommand + xDataByte1 + xDataByte2
-            p:write(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, xDataByte2, 
-                                oneByteChecksum(checkSum)), timeout__ms)
-        end
+            numberBytes = 0x4
+            checkSum = numberBytes + xCommand + xDataByte1 + xDataByte2
+            p:write(string.char(cmd.TERM_MSG_SOM, 
+                                numberBytes, 
+                                xCommand, 
+                                xDataByte1, 
+                                xDataByte2, 
+                                oneByteChecksum(checkSum)), 
+                                timeout__ms)
+            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, xDataByte2, oneByteChecksum(checkSum)))) 
+        end 
     end
 end
 
 
-function ft.openCOM() 
+function ft.openCOM()  -- default is COM6
     e, p = rs232.open(portName)
     if e == rs232.RS232_ERR_NOERROR then
         assert(p:set_baud_rate(rs232.RS232_BAUD_230400) == rs232.RS232_ERR_NOERROR)
@@ -216,10 +235,24 @@ function ft.openCOM()
 end
 
 
+function ft.openCOM(xPortName) 
+    e, p = rs232.open(xPortName)
+    if e == rs232.RS232_ERR_NOERROR then
+        assert(p:set_baud_rate(rs232.RS232_BAUD_230400) == rs232.RS232_ERR_NOERROR)
+        assert(p:set_data_bits(rs232.RS232_DATA_8) == rs232.RS232_ERR_NOERROR)
+        assert(p:set_parity(rs232.RS232_PARITY_NONE) == rs232.RS232_ERR_NOERROR)
+        assert(p:set_stop_bits(rs232.RS232_STOP_1) == rs232.RS232_ERR_NOERROR)
+        assert(p:set_flow_control(rs232.RS232_FLOW_OFF)  == rs232.RS232_ERR_NOERROR)
+        print("OK, port open with values: " .. tostring(p))
+    else
+        print("Can't open serial port " .. xPortName .. " error: " .. rs232.error_tostring(e))
+    end
+    return e
+end
+
 function ft.closeCOM()
     assert(p:close() == rs232.RS232_ERR_NOERROR)
 end
-
 
 -- passes in a string and makes it into a string hex
 -- @str: the string we intend to make into a string hex
@@ -238,11 +271,14 @@ function fromhex(str)
 end
 
 function ft.setVentMode(xMode)
-    if (xMode >= range.modeMIN and xMode <= range.modeMAX) then
+    local isValid = (xMode >= range.modeMIN) and (xMode <= range.modeMAX)
+    if (isValid) then
         writeToSerial(sd.TERMINAL_SET_VENT_MODE, xMode)
-        modeError()
-    else print ("Out of range.")
+        delay_sec(time_400ms)
+    else 
+        print ("ERROR: Attemped to set invalid Mode.")
     end
+    return isValid
 end
 
 function ft.setVetRunState(xOnOff)
@@ -738,10 +774,10 @@ end
 function ft.getWaveData(xIterations)
     writeToSerial(cmd.TERM_STOP_WAVE_DATA)
     writeToSerial(cmd.TERM_GET_WAVE_DATA)
-	print('wavePressure, waveFlow, waveETCO2')
+    print('wavePressure, waveFlow, waveETCO2')
     for  i = 1,   xIterations do
         local cmdRead, wave = ft.readVentWave()
-		local scale = FTI.measuredData_ScaleFactor.etCO2
+        local scale = FTI.measuredData_ScaleFactor.etCO2
         if wave ~= nil then
             print(wave.Pressure .. ', ' .. wave.Flow .. ', ' .. wave.etCO2 )
         end
@@ -752,13 +788,8 @@ end
 -------------------------------------------------------
 function ft.getVentMode()
     writeToSerial(cmd.TERM_GET_VENT_MODE)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(cmd.TERM_GET_VENT_MODE)) then
-        if (data >= range.modeMIN or data <= range.modeMAX) then
-            return data
-        else print("An error has occured")
-        end 
-    end
+    local _, mode = ft.readVentData()
+    return mode
 end
 
 function ft.getModeOption1()

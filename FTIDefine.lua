@@ -197,8 +197,8 @@ local para_get_waveData = {
 }
 
 local range = {
-    modeMIN                =     1,
-    modeMAX                =    10,
+    modeMIN                =     ventMode.IPPV,
+    modeMAX                =     ventMode.O2Therapy,
     OFF                    =     0,
     ON                     =     1,
     NEONATAL               =     1,
