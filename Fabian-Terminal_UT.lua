@@ -5,9 +5,10 @@
 -- Tests fabian Terminal Interface library
 ------------------------------------------------------------------------------
 
-ft = require "fabianTerminal"
+ft = require "fabian-Terminal"
+local portName = "COM6"
 
-ft.openCOM()
+ft.openCOM(portName)
 
 --ft.setBPM(16)
 --ft.setIFlow(10)
@@ -63,8 +64,8 @@ ft.openCOM()
 --ft.getAVG()
 --ft.getContinousAVG(10)
 --ft.getContinousWaveData(100)
-ft.getWaveData(1000)
---print(ft.getVentMode())
+--ft.getWaveData(10)
+print(ft.getVentMode())
 --print(ft.getRunState())
 --print(ft.getStateVLimit())
 --print(ft.getStateVGuarentee())

@@ -5,9 +5,8 @@
 -- fabian Terminal Interface library
 ------------------------------------------------------------------------------
 
-fti = require "FTIDefine"
+fti = require "FTI-Define"
 rs232 = require 'luars232'
-local portName = "COM6"
 
 -------------define------------
 local vs      = FTI.para_get_VentSettings
@@ -22,7 +21,7 @@ local ft = {}
 local p, e, NBF, CMD = nil
 local timeout__ms = 600
 local read_len = 63 -- read one byte
-local time_400ms = 0.4
+local time_600ms = 0.6
    
 local function delay_sec(xSecond)  
     local clock = os.clock
@@ -31,7 +30,7 @@ local function delay_sec(xSecond)
 end
 
 function ft.delay()
-    delay_sec(time_400ms)
+    delay_sec(time_600ms)
 end
 
 local function printDebug(msg)
@@ -87,9 +86,11 @@ end
 
 function modeError()
     local ventData = ft.readVentData()
-    if (ventData == cmd.TERM_PARAM_NOSUPPORT) then 
-        print ("Mode error has occured. Please select corresponding mode")
+	local isNotValid = (ventData == cmd.TERM_PARAM_NOSUPPORT)
+    if (isNotValid) then 
+        assert(isNotValid, "Mode error has occured. Please select corresponding mode")
     end
+	return isNotValid
 end
 
 -- this function:
@@ -98,7 +99,7 @@ end
 --     3. returns all data read from the vent
 function ft.readVentData()
     local err, dataRead = p:read(read_len, timeout__ms)
-    assert(e == rs232.RS232_ERR_NOERROR)
+    assert(err == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
         local cmdRead = getByteValue(dataRead,3)
         if getByteValue(dataRead,2) == 3 then 
@@ -117,8 +118,8 @@ function ft.readVentBreath()
     local err, dataRead = p:read(read_len, timeout__ms)
     local breathData = {}
     local cmdRead = getByteValue(dataRead,3)
-    if (DEBUG ~= 0) then print (tohex(dataRead)) end
-    assert(e == rs232.RS232_ERR_NOERROR)
+    printDebug(tohex(dataRead))
+    assert(err == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then
         cmdRead = getByteValue(dataRead,3)
         breathData.mode                     = getByteValue(dataRead,      mr.ActiveVentMode)
@@ -160,9 +161,9 @@ end
 function ft.readVentWave()
     local err, dataRead = p:read(read_len, timeout__ms)
     local wave = {}
-    assert(e == rs232.RS232_ERR_NOERROR)
+    assert(err == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
-        if (DEBUG ~= 0) then print (tohex(dataRead)) end
+        printDebug(tohex(dataRead))
         wd = FTI.para_get_waveData
         wave.Pressure = getSignedShort(dataRead,wd.Pressure) / mdScale.Pressure
         wave.Flow     = getSignedShort(dataRead,wd.Flow    ) / mdScale.Flow
@@ -217,27 +218,9 @@ function writeToSerial(xCommand, xDataByte1, xDataByte2)
     end
 end
 
-
-function ft.openCOM()  -- default is COM6
-    e, p = rs232.open(portName)
-    if e == rs232.RS232_ERR_NOERROR then
-        assert(p:set_baud_rate(rs232.RS232_BAUD_230400) == rs232.RS232_ERR_NOERROR)
-        assert(p:set_data_bits(rs232.RS232_DATA_8) == rs232.RS232_ERR_NOERROR)
-        assert(p:set_parity(rs232.RS232_PARITY_NONE) == rs232.RS232_ERR_NOERROR)
-        assert(p:set_stop_bits(rs232.RS232_STOP_1) == rs232.RS232_ERR_NOERROR)
-        assert(p:set_flow_control(rs232.RS232_FLOW_OFF)  == rs232.RS232_ERR_NOERROR)
-        if (DEBUG ~= 0) then print("OK, port open with values " .. tostring(p)) end
-    else
-        print("Can't open serial port " .. portName .. " error: " .. rs232.error_tostring(e))
-    end
-
-    return e
-end
-
-
 function ft.openCOM(xPortName) 
-    e, p = rs232.open(xPortName)
-    if e == rs232.RS232_ERR_NOERROR then
+    portError, p = rs232.open(xPortName)
+    if portError == rs232.RS232_ERR_NOERROR then
         assert(p:set_baud_rate(rs232.RS232_BAUD_230400) == rs232.RS232_ERR_NOERROR)
         assert(p:set_data_bits(rs232.RS232_DATA_8) == rs232.RS232_ERR_NOERROR)
         assert(p:set_parity(rs232.RS232_PARITY_NONE) == rs232.RS232_ERR_NOERROR)
@@ -245,9 +228,9 @@ function ft.openCOM(xPortName)
         assert(p:set_flow_control(rs232.RS232_FLOW_OFF)  == rs232.RS232_ERR_NOERROR)
         print("OK, port open with values: " .. tostring(p))
     else
-        print("Can't open serial port " .. xPortName .. " error: " .. rs232.error_tostring(e))
+        print("Can't open serial port " .. xPortName .. " error: " .. rs232.error_tostring(portError))
     end
-    return e
+    return portError
 end
 
 function ft.closeCOM()
@@ -274,7 +257,7 @@ function ft.setVentMode(xMode)
     local isValid = (xMode >= range.modeMIN) and (xMode <= range.modeMAX)
     if (isValid) then
         writeToSerial(sd.TERMINAL_SET_VENT_MODE, xMode)
-        delay_sec(time_400ms)
+        delay_sec(time_600ms)
     else 
         print ("ERROR: Attemped to set invalid Mode.")
     end
@@ -337,7 +320,7 @@ function ft.setStatePressureRiseControl(xMode)
     end
 end 
 
-function ft.setHFOFreqRec(xFreq__hz)
+function ft.setHFOFreqRec__hz(xFreq__hz)
     if (xFreq__hz >= range.HFOFreqRecMIN and xFreq__hz <= range.HFOFreqRecMAX) then
         if (xFreq__hz >= range.HFOFreqRec1 and xFreq__hz < range.HFOFreqRec1Half) then
             xFreq__hz = range.HFOFreqRec1
@@ -355,7 +338,7 @@ function ft.setHFOFreqRec(xFreq__hz)
     end
 end
 
-function ft.setHFOFlow(xFreq__lpm)
+function ft.setHFOFlow__lpm(xFreq__lpm)
     if (xFreq__lpm >= range.HFOFlowMIN and xFreq__lpm <= range.HFOFlowMAX) then
         local freqScaled = xFreq__lpm * mdScale.Flow
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(freqScaled)
@@ -373,7 +356,7 @@ function ft.setLeakCompensation(xLeak)
     end
 end 
 
-function ft.setPInsPressure(xPressure__mbar)
+function ft.setPInsPressure__mbar(xPressure__mbar)
     if (xPressure__mbar >= range.PInspPressMIN and xPressure__mbar <= range.PInspPressMAX) then 
         local pressureScaled = xPressure__mbar * mdScale.Pressure
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pressureScaled)
@@ -383,7 +366,7 @@ function ft.setPInsPressure(xPressure__mbar)
     end
 end
 
-function ft.setPeep(xPeep__mbar)
+function ft.setPeep__mbar(xPeep__mbar)
     if (xPeep__mbar >= range.PEEPMIN and xPeep__mbar <= range.PEEPMAX) then 
         local peepScaled = xPeep__mbar * mdScale.Peep
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(peepScaled)
@@ -393,7 +376,7 @@ function ft.setPeep(xPeep__mbar)
     end
 end
 
-function ft.setPSV(xPPSV__mbar)
+function ft.setPSV__mbar(xPPSV__mbar)
     if (xPPSV__mbar >= range.PPSVMIN and xPPSV__mbar <= range.PPSVMAX) then 
         local ppsvScaled = xPPSV__mbar * mdScale.PPSVS
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ppsvScaled)
@@ -403,13 +386,13 @@ function ft.setPSV(xPPSV__mbar)
     end
 end
 
-function ft.setBPM(xBreatheRate__bpm)
+function ft.setBPM__bpm(xBreatheRate__bpm)
     local highByte, lowByte = SplitNumberIntoHiAndLowBytes(xBreatheRate__bpm)
     writeToSerial(sd.TERMINAL_SET_PARAM_BPM, dataByte, lowByte)
     modeError()
 end
 
-function ft.setHFOAmp(xAmp__mbar)
+function ft.setHFOAmp__mbar(xAmp__mbar)
     if (xAmp__mbar >= range.HFOAmpMIN and xAmp__mbar <= range.HFOAmpMAX) then 
         local ampScaled = xAmp__mbar * mdScale.HFOAmp
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ampScaled)
@@ -419,7 +402,7 @@ function ft.setHFOAmp(xAmp__mbar)
     end
 end
 
-function ft.setHFOAmpMax(xAmp__mbar)
+function ft.setHFOAmpMax__mbar(xAmp__mbar)
     if (xAmp__mbar >= range.HFOAmpMIN and xAmp__mbar <= range.HFOAmpMAX) then 
         local ampScaled = xAmp__mbar * mdScale.HFOAmp
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ampScaled)
@@ -429,7 +412,7 @@ function ft.setHFOAmpMax(xAmp__mbar)
     end
 end
 
-function ft.setHFOFreq(xFreq__hz)
+function ft.setHFOFreq__hz(xFreq__hz)
     if (xFreq__hz >= range.HFOFreqMIN and xFreq__hz <= range.HFOFreqMAX) then 
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(xFreq__hz)
         writeToSerial(sd.TERMINAL_SET_PARAM_HFFreq, highByte, lowByte)
@@ -446,7 +429,7 @@ function ft.setO2(xO2)
     end
 end
 
-function ft.setIFlow(xIFlow__lpm)
+function ft.setIFlow__lpm(xIFlow__lpm)
     if (xIFlow__lpm >= range.FlowMIN and xIFlow__lpm <= range.FlowMAX) then 
         local IFlowScaled = xIFlow__lpm * mdScale.Flow
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(IFlowScaled)
@@ -456,7 +439,7 @@ function ft.setIFlow(xIFlow__lpm)
     end
 end
 
-function ft.setEFlow(xEFlow__lpm)
+function ft.setEFlow__lpm(xEFlow__lpm)
     if (xEFlow__lpm >= range.FlowMIN and xEFlow__lpm <= range.FlowMAX) then 
         local EFlowScaled = xEFlow__lpm * mdScale.Flow
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(EFlowScaled)
@@ -466,7 +449,7 @@ function ft.setEFlow(xEFlow__lpm)
     end
 end
 
-function ft.setRiseTime(xTime__sec)
+function ft.setRiseTime__sec(xTime__sec)
     if (xTime__sec >= range.RiseTimeMIN and xTime__sec <= range.RiseTimeMAX) then 
         local timeScaled = xTime__sec * mdScale.Time
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
@@ -476,7 +459,7 @@ function ft.setRiseTime(xTime__sec)
     end
 end
 
-function ft.setITime(xTime__sec)
+function ft.setITime__sec(xTime__sec)
     if (xTime__sec >= range.ITimeMIN and xTime__sec <= range.ITimeMAX) then 
         local timeScaled = xTime__sec * mdScale.Time
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
@@ -486,7 +469,7 @@ function ft.setITime(xTime__sec)
     end
 end
 
-function ft.setETime(xTime__sec)
+function ft.setETime__sec(xTime__sec)
     if (xTime__sec >= range.ETimeMIN and xTime__sec <= range.ETimeMAX) then 
         local timeScaled = xTime__sec * mdScale.Time
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
@@ -496,7 +479,7 @@ function ft.setETime(xTime__sec)
     end
 end
 
-function ft.setHFOPMean(xPMean__mbar)
+function ft.setHFOPMean__mbar(xPMean__mbar)
     if (xPMean__mbar >= range.HFOPMeanMIN and xPMean__mbar <= range.HFOPMeanMAX) then 
         local pmeanScaled = xPMean__mbar * mdScale.Pressure
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmeanScaled)
@@ -506,7 +489,7 @@ function ft.setHFOPMean(xPMean__mbar)
     end
 end
 
-function ft.setHFOPMeanRec(xPMean__mbar)
+function ft.setHFOPMeanRec__mbar(xPMean__mbar)
     if (xPMean__mbar >= range.HFOPMeanMIN and xPMean__mbar <= range.HFOPMeanMAX) then 
         local pmeanScaled = xPMean__mbar * mdScale.Pressure
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmeanScaled)
@@ -516,7 +499,7 @@ function ft.setHFOPMeanRec(xPMean__mbar)
     end 
 end
 
-function ft.setVLimit(xVLimit__ml)
+function ft.setVLimit__ml(xVLimit__ml)
     if (xVLimit__ml >= range.VLimitMIN and xVLimit__ml <= range.VLimitMAX) then 
         local vlimitScaled = xVLimit__ml * mdScale.Vol
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(vlimitScaled)
@@ -526,7 +509,7 @@ function ft.setVLimit(xVLimit__ml)
     end
 end
 
-function ft.setVGuarantee(xVGuarantee__ml)
+function ft.setVGuarantee__ml(xVGuarantee__ml)
     if (xVGuarantee__ml >= range.VGuaranteeMIN and xVGuarantee__ml <= range.VGuaranteeMAX) then 
         local vguaranteeScaled = xVGuarantee__ml * mdScale.Vol
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(vguaranteeScaled)
@@ -536,7 +519,7 @@ function ft.setVGuarantee(xVGuarantee__ml)
     end
 end
 
-function ft.setAbortCriterionPSV(xPSV__per)
+function ft.setAbortCriterionPSV__per(xPSV__per)
     if (xPSV__per >= range.AbortPSVMIN and xPSV__per <= range.AbortPSVMAX) then 
         writeToSerial(sd.TERMINAL_SET_PARAM_AbortCriterionPSV, xPSV__per)
         modeError()
@@ -544,7 +527,7 @@ function ft.setAbortCriterionPSV(xPSV__per)
     end
 end
 
-function ft.setTherapyFlow(xFlow__lpm)
+function ft.setTherapyFlow__lpm(xFlow__lpm)
     if (xFlow__lpm >= range.TherapyFlowMIN and xFlow__lpm <= range.TherapyFlowMAX) then 
         local flowScaled = xFlow__lpm * mdScale.Flow
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(flowScaled)
@@ -566,7 +549,7 @@ function ft.setTrigger(xTrigger__senHigh)
 end
 
 
-function ft.setFlowMin(xFlow__lpm)
+function ft.setFlowMin__lpm(xFlow__lpm)
     if (xFlow__lpm >= range.FlowMinuteMIN and xFlow__lpm <= range.FlowMinuteMAX) then 
         local flowScaled = xFlow__lpm * mdScale.Flow
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(flowScaled)
@@ -576,23 +559,27 @@ function ft.setFlowMin(xFlow__lpm)
     end
 end
 
-function ft.setCPAP(xCPAP__mbar) 
-    if (xCPAP__mbar >= range.CPAPMIN and xCPAP__mbar <= range.CPAPMAX) then 
-        local cpapScaled = xCPAP__mbar * mdScale.CPAP
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(cpapScaled)
+function ft.setCPAP__mbar(xCPAP__mbar) 
+    local isValid = (xCPAP__mbar >= range.CPAPMIN) and (xCPAP__mbar <= range.CPAPMAX)
+    if (isValid) then 
+        local scaledCPAP = xCPAP__mbar * mdScale.CPAP
+        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(scaledCPAP)
         writeToSerial(sd.TERMINAL_SET_PARAM_CPAP, highByte, lowByte)
         modeError()
-    else print ("Out of range.")
+    else 
+	    assert(isValid, "ASSERT: Attempted to set invalid CPAP.")
     end
 end
 
-function ft.setPManuel(xPManuel__mbar)
-    if (xPManuel__mbar >= range.PManuelMIN and xPManuel__mbar <= range.PManuelMAX) then 
+function ft.setPManuel__mbar(xPManuel__mbar)
+    local isValid = (xPManuel__mbar >= range.PManuelMIN) and (xPManuel__mbar <= range.PManuelMAX)
+    if (isValid) then 
         local pmanuelScaled = xPManuel__mbar * mdScale.PManuel
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmanuelScaled)
         writeToSerial(sd.TERMINAL_SET_PARAM_PManual, highByte, lowByte)
         modeError()
-    else print ("Out of range.")
+    else
+	    assert(isValid, "ASSERT: Attempted to set invalid Pmanual.")
     end
 end
 
@@ -604,7 +591,7 @@ function ft.setBackup(xBackup)
     end
 end
 
-function ft.setITimeRec(xITime__sec)
+function ft.setITimeRec__sec(xITime__sec)
     if (xITime__sec >= range.ITimeRecMIN and xITime__sec <= range.ITimeRecMAX) then 
         local itimeScaled = xITime__sec * mdScale.Time
         local highByte, lowByte = SplitNumberIntoHiAndLowBytes(itimeScaled)

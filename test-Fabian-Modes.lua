@@ -9,8 +9,8 @@
 --     2. run command: $currentDirectory$> lua testFabianMode.lua 
 --------------------------------------------------------------------
 
-local fti      = require "FTIDefine"
-local ft       = require "fabianTerminal"
+local fti      = require "FTI-Define"
+local ft       = require "fabian-Terminal"
 local portName = "COM9"  
 local modes    = FTI.ventMode
 local range    = FTI.range
