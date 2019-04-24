@@ -11,61 +11,110 @@ local portName = "COM6"
 ft.openCOM(portName)
 
 --ft.setBPM(16)
---ft.setIFlow(10)
+--ft.setIFlow__lpm(12)
 --ft.setO2(21)
---ft.setPeep(4)
---ft.setPInsPressure(14)
---ft.setStateVGuarantee(0)
+--ft.setPeep__mbar(4)
+--ft.setPInsPressure__mbar(12)
+--ft.setStateVGuarantee(1)
 --ft.setStateVLimit(1)
 --ft.setVetRunState(1)
 --ft.setVentMode(3)
---ft.setPSV(6)
---ft.setStatePressureRiseControl(1)
---ft.setStateBodyWeightRange(1) --1 or 2
---ft.setManBreathRunning(0)
---ft.setIERatioHFO(1) --0=3 1=2 2=3
---ft.setHFOFreqRec(95) --once you get to 60 we can only do multi of 2 i.e 120 180 ect
---ft.setHFOFlow(15)
+--ft.setPSV__mbar(6)
+--ft.setStatePressureRiseControl(0) --0=i-flow 1=risetime 
+--ft.setStateBodyWeightRange(0) --1 or 2
+--ft.setManBreathRunning(1)
+--ft.setIERatioHFO(0) --0=3 1=2 2=3
+--ft.setHFOFreqRec__hz(239) --once you get to 60 we can only do multi of 2 i.e 120 180 ect
+--ft.setHFOFlow__lpm(15)
 --ft.setLeakCompensation(1) 
---ft.setHFOAmp(20)
---ft.setHFOAmpMax(25)
---ft.setHFOFreq(15)
---ft.setEFlow(5)
---ft.setRiseTime(.5) 
---ft.setITime(1)
---ft.setETime(5)
---ft.setHFOPMean(10)
---ft.setHFOPMeanRec(15)
---ft.setVLimit(6)
---ft.setVGuarantee(4)
---ft.setAbortCriterionPSV(5)--in psv menu
---ft.setTherapyFlow(5)
---ft.setTrigger(5)
---ft.setFlowMin(9) --cpap
---ft.setCPAP(5) 
---ft.setPManuel(12)
---ft.setBackup(4)
---ft.setITimeRec(4)
+--ft.setHFOAmp__mbar(21)
+--ft.setHFOAmpMax__mbar(25)
+--ft.setHFOFreq__hz(14)
+--ft.setEFlow__lpm(5)
+--ft.setRiseTime__sec(.6) 
+--ft.setITime__sec(1.1)
+--ft.setETime__sec(5)
+--ft.setHFOPMean__mbar(8)
+--ft.setHFOPMeanRec__mbar(15)
+--ft.setVLimit__ml(6)
+--ft.setVGuarantee__ml(4)
+--ft.setAbortCriterionPSV__per(5)--in psv menu
+--ft.setTherapyFlow__lpm(5)
+--ft.setTrigger(3)                                         
+--ft.setFlowMin__lpm(9) --cpap
+--ft.setCPAP__mbar(6) 
+--ft.setPManuel__mbar(12)
+--ft.setBackup(0)
+--ft.setITimeRec__sec(10)
 --ft.setO2Flush(26)
 
 
 ----below can not live update--------
---ft.setSPO2Low(1) 
---ft.setSPO2High(99) 
+--ft.setSPO2Low(10) 
+--ft.setSPO2High(98) 
 --ft.setFIO2Low(21) 
 --ft.setFIO2High(100) 
 --------------------------------------
 --ft.setStatePrico(0)
 
-
+--@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ----------Get Values----------
---ft.getBTB()
+--@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+------------------------------
+------ Breath to Breath ------
+--[[
+local breathData = ft.getBTB()
+ for k, v in pairs(breathData) do
+	print(k .. " = " .. v)
+end
+ ]]
+------------------------------
+------------------------------
+
+------------------------------
+-- Continuous Breath to Breath 
+--[[
+local breathData = ft.getContinousBTB()
+for i = 0, 5 do
+    for k, v in pairs(breathData) do
+	    print(k .. " = " .. v)
+    end
+end
+]]
+------------------------------
+------------------------------
+
 --ft.getContinousBTB(1)
---ft.getAVG()
+
+------------------------------
+-- Breath to Breath Average --
+--[[
+local breathData = ft.getAVG()
+ for k, v in pairs(breathData) do
+	print(k .. " = " .. v)
+end
+]]
+------------------------------
+------------------------------
+
 --ft.getContinousAVG(10)
 --ft.getContinousWaveData(100)
+------------------------------
+-- Continuous Breath to Breath 
+
+local breathData = ft.getContinousWaveData()
+for i = 0, 1000 do
+    for k, v in pairs(breathData) do
+	    print(k .. " = " .. v)
+    end
+end
+
+------------------------------
+------------------------------
+
 --ft.getWaveData(10)
-print(ft.getVentMode())
+--print(ft.getVentMode())
 --print(ft.getRunState())
 --print(ft.getStateVLimit())
 --print(ft.getStateVGuarentee())
@@ -110,5 +159,8 @@ print(ft.getVentMode())
 --print(ft.getFIO2Low()) --this does not match whats on the gui
 --print(ft.getFIO2High())
 --print(ft.getPRICO())
+
+
+
 
 ft.closeCOM()

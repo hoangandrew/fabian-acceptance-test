@@ -4,39 +4,41 @@
 ------------------------------------------------------------------------------
 -- fabian Terminal Interface library
 ------------------------------------------------------------------------------
-
-fti = require "FTI-Define"
-rs232 = require 'luars232'
-
+pubFTI = require "FTI-Public-Define"
+priFTI = require "FTI-Private-Define"
+rs232  = require 'luars232'
 -------------define------------
-local vs      = FTI.para_get_VentSettings
-local sd      = FTI.para_set_settingData
-local cmd     = FTI.command
-local range   = FTI.range
-local mdScale = FTI.measuredData_ScaleFactor
-local mr      = FTI.para_measure_response
+local ps      = pubFTI.patientSize
+local oos     = pubFTI.onOffState
+local vs      = priFTI.para_get_VentSettings
+local sd      = priFTI.para_set_settingData
+local cmd     = priFTI.command
+local mdScale = priFTI.measuredData_ScaleFactor
+local mr      = priFTI.para_measure_response
+local ev      = priFTI.errorValue
+local hfrc    = priFTI.hfoFreqRecCondition
+local cr      = priFTI.continuousRespond
+local som     = priFTI.SOM
+local def     = priFTI.def
 local DEBUG   = false
 -------------------------------
-local ft = {}
 local p, e, NBF, CMD = nil
 local timeout__ms = 600
 local read_len = 63 -- read one byte
-local time_600ms = 0.6
-   
-local function delay_sec(xSecond)  
-    local clock = os.clock
-    local t0 = clock()
-    while (clock() - t0) <= xSecond do end
-end
 
-function ft.delay()
-    delay_sec(time_600ms)
+-- passes in a string and makes it into a string hex
+-- @str: the string we intend to make into a string hex
+local function tohex(str)
+if str ~= nil then 
+    return (str:gsub('.', function (c)
+        return string.format('%02X', string.byte(c))
+    end))
+end
 end
 
 local function printDebug(msg)
     if (DEBUG ~= false) then print(msg) end 
 end
-
 
 local function roundDown(xNumber)
     local result
@@ -59,7 +61,6 @@ local function SplitNumberIntoHiAndLowBytes(xNumber)
     return highByte, lowByte
 end
 
-
 local function getValue(xSerialData, xStartByte, xLength)
     local hexValue = tohex(xSerialData)
     local startChar = (xStartByte * 2) - 1
@@ -67,39 +68,50 @@ local function getValue(xSerialData, xStartByte, xLength)
     return tonumber("0x" .. hexValue:sub(startChar, endChar))
 end
 
-
 local function getByteValue(xSerialData, xStartByte)
     return getValue(xSerialData, xStartByte, 1)
 end
 
-
 local function getUnsignedShort(xSerialData, xStartByte)
-    return getValue(xSerialData, xStartByte, 2)
+	local newUnsignedShort = getValue(xSerialData, xStartByte, 2)
+	if (newUnsignedShort == ev.TERMINAL_NOTVALID) then
+		newUnsignedShort = nil
+	end
+    return newUnsignedShort
 end
-
 
 local function getSignedShort(xSerialData, xStartByte)
     local unsignedShortValue = getValue(xSerialData, xStartByte, 2)
-    return ((unsignedShortValue + (2^15)) % (2^16) - (2^15))
+	local newSignedSV = nil
+	if (unsignedShortValue ~= ev.TERMINAL_NOTVALID) then
+		newSignedSV = (unsignedShortValue + (2^15)) % (2^16) - (2^15)
+	end
+    return (newSignedSV)
 end
 
-
-function modeError()
-    local ventData = ft.readVentData()
-	local isNotValid = (ventData == cmd.TERM_PARAM_NOSUPPORT)
-    if (isNotValid) then 
-        assert(isNotValid, "Mode error has occured. Please select corresponding mode")
+local function oneByteChecksum (xCheckSum)
+    if xCheckSum >= 256 then
+        xCheckSum = xCheckSum % 256
     end
-	return isNotValid
+    return xCheckSum
+end
+
+local function getScaledValue(xValue, xScale)
+	local scaledValue = xValue
+	if xValue ~= nil then
+		scaledValue = xValue / xScale
+	end
+	return scaledValue
 end
 
 -- this function:
 --     1. reads the data coming from the vent
 --     2. splits it into which command the vent read and the data in addition
 --     3. returns all data read from the vent
-function ft.readVentData()
+local function readVentData()
     local err, dataRead = p:read(read_len, timeout__ms)
-    assert(err == rs232.RS232_ERR_NOERROR)
+	if dataRead ~=nil then printDebug('readVentData: 0x' .. tohex(dataRead)) end
+    --assert(err == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
         local cmdRead = getByteValue(dataRead,3)
         if getByteValue(dataRead,2) == 3 then 
@@ -112,9 +124,18 @@ function ft.readVentData()
     end 
 end
 
+local function checkForError()
+    local ventData = readVentData()
+	local isNotValid = (ventData == ev.TERM_PARAM_NOSUPPORT)
+    if (isNotValid) then 
+        assert(isNotValid, "Mode error has occured. Please select corresponding mode")
+    end
+	return isNotValid
+end
+
 -- this function reads in the vent data and parses it to its corresponding commands.
 -- note: this applies to continuous functions (NOT WAVE)
-function ft.readVentBreath()
+local function readVentBreath()
     local err, dataRead = p:read(read_len, timeout__ms)
     local breathData = {}
     local cmdRead = getByteValue(dataRead,3)
@@ -123,48 +144,48 @@ function ft.readVentBreath()
     if dataRead ~= nil then
         cmdRead = getByteValue(dataRead,3)
         breathData.mode                     = getByteValue(dataRead,      mr.ActiveVentMode)
-        breathData.peakPressure             = getSignedShort(dataRead,    mr.Pmax             ) / mdScale.Pressure
-        breathData.meanPressure             = getSignedShort(dataRead,    mr.Pmitt            ) / mdScale.Pressure
-        breathData.PEEP                     = getSignedShort(dataRead,    mr.PEEP             ) / mdScale.Peep
-        breathData.dynamticCompliance       = getUnsignedShort(dataRead,  mr.DynamicCompliance) / mdScale.DynamicCompliance
-        breathData.overExtension            = getUnsignedShort(dataRead,  mr.C20C             ) / mdScale.OverextensionIndex
-        breathData.ventilaryResistance      = getUnsignedShort(dataRead,  mr.Resistance       ) / mdScale.VentilatoryResistance
-        breathData.minuteVolume             = getUnsignedShort(dataRead,  mr.MV               ) / mdScale.MinuteVolume
-        breathData.inspMandTidalVolume      = getUnsignedShort(dataRead,  mr.TVI              ) / mdScale.MandatoryTidal
-        breathData.expMandTidalVolume       = getUnsignedShort(dataRead,  mr.TVE              ) / mdScale.MandatoryTidal
-        breathData.expMandTVRespirator      = getUnsignedShort(dataRead,  mr.TVEresp          ) / mdScale.MandatoryTidal
-        breathData.expMandTVPatient         = getUnsignedShort(dataRead,  mr.TVEpat           ) / mdScale.MandatoryTidal
-        breathData.HFAmp                    = getUnsignedShort(dataRead,  mr.HFAmpl           ) / mdScale.HFOAmp
-        breathData.HFExpMandTidalVolume     = getUnsignedShort(dataRead,  mr.TVEHFO           ) / mdScale.MandatoryTidal
+        breathData.peakPressure             = getScaledValue(getSignedShort(dataRead,    mr.Pmax             ), mdScale.Pressure)
+        breathData.meanPressure             = getScaledValue(getSignedShort(dataRead,    mr.Pmitt            ), mdScale.Pressure)
+        breathData.PEEP                     = getScaledValue(getSignedShort(dataRead,    mr.PEEP             ), mdScale.Peep)
+        breathData.dynamticCompliance       = getScaledValue(getUnsignedShort(dataRead,  mr.DynamicCompliance), mdScale.DynamicCompliance)
+        breathData.overExtension            = getScaledValue(getUnsignedShort(dataRead,  mr.C20C             ), mdScale.OverextensionIndex)
+        breathData.ventilaryResistance      = getScaledValue(getUnsignedShort(dataRead,  mr.Resistance       ), mdScale.VentilatoryResistance)
+        breathData.minuteVolume             = getScaledValue(getUnsignedShort(dataRead,  mr.MV               ), mdScale.MinuteVolume)
+        breathData.inspMandTidalVolume      = getScaledValue(getUnsignedShort(dataRead,  mr.TVI              ), mdScale.MandatoryTidal)
+        breathData.expMandTidalVolume       = getScaledValue(getUnsignedShort(dataRead,  mr.TVE              ), mdScale.MandatoryTidal)
+        breathData.expMandTVRespirator      = getScaledValue(getUnsignedShort(dataRead,  mr.TVEresp          ), mdScale.MandatoryTidal)
+        breathData.expMandTVPatient         = getScaledValue(getUnsignedShort(dataRead,  mr.TVEpat           ), mdScale.MandatoryTidal)
+        breathData.HFAmp                    = getScaledValue(getUnsignedShort(dataRead,  mr.HFAmpl           ), mdScale.HFOAmp)
+        breathData.HFExpMandTidalVolume     = getScaledValue(getUnsignedShort(dataRead,  mr.TVEHFO           ), mdScale.MandatoryTidal)
         breathData.gasTransportCoefficient  = getUnsignedShort(dataRead,  mr.DCO2             ) 
-        breathData.triggerVolumeFlow        = getUnsignedShort(dataRead,  mr.TrigVol          ) / mdScale.TriggerVolumeFlow
-        breathData.InspTimePSV              = getUnsignedShort(dataRead,  mr.ITimePSV         ) / mdScale.InspTimePSV
-        breathData.SpO2                     = getSignedShort(dataRead,    mr.SPO2             ) / mdScale.SPO2
+        breathData.triggerVolumeFlow        = getScaledValue(getUnsignedShort(dataRead,  mr.TrigVol          ), mdScale.TriggerVolumeFlow)
+        breathData.InspTimePSV              = getScaledValue(getUnsignedShort(dataRead,  mr.ITimePSV         ), mdScale.InspTimePSV)
+        breathData.SpO2                     = getScaledValue(getSignedShort(dataRead,    mr.SPO2             ), mdScale.SPO2)
         breathData.pulseRate                = getSignedShort(dataRead,    mr.PulseRate        ) 
-        breathData.perfusionIndex           = getSignedShort(dataRead,    mr.PerfusionIndex   ) / mdScale.PerfusionIndex
-        breathData.etCO2                    = getSignedShort(dataRead,    mr.ETCO2            ) / mdScale.etCO2
+        breathData.perfusionIndex           = getScaledValue(getSignedShort(dataRead,    mr.PerfusionIndex   ), mdScale.PerfusionIndex)
+        breathData.etCO2                    = getScaledValue(getSignedShort(dataRead,    mr.ETCO2            ), mdScale.etCO2)
         breathData.respiratoryRate          = getUnsignedShort(dataRead,  mr.BPM              ) 
-        breathData.respiratoryRateETCO2Mod  = getUnsignedShort(dataRead,  mr.BPMco2           ) --this is not defined in the PDF
+        breathData.respiratoryRateETCO2Mod  = getUnsignedShort(dataRead,  mr.BPMco2           ) 
         breathData.leakage                  = getUnsignedShort(dataRead,  mr.Leak             ) 
         breathData.HFRate                   = getUnsignedShort(dataRead,  mr.HFFreq           ) 
-        breathData.shareMVRespirator        = getSignedShort(dataRead,    mr.Percent          )   / mdScale.MinuteVolume
-        breathData.FiO2                     = getUnsignedShort(dataRead,  mr.OxyVal           ) / mdScale.FIO2
-        breathData.inspFlow                 = getSignedShort(dataRead,    mr.INSP_FLOW        )   / mdScale.Flow
-        breathData.expFlow                  = getSignedShort(dataRead,    mr.EXP_FLOW         )   / mdScale.Flow
-        breathData.demandFlow               = getSignedShort(dataRead,    mr.DEMAND_FLOW      )   / mdScale.Flow
+        breathData.shareMVRespirator        = getScaledValue(getSignedShort(dataRead,    mr.Percent          ), mdScale.MinuteVolume)
+        breathData.FiO2                     = getScaledValue(getUnsignedShort(dataRead,  mr.OxyVal           ), mdScale.FIO2)
+        breathData.inspFlow                 = getScaledValue(getSignedShort(dataRead,    mr.INSP_FLOW        ), mdScale.Flow)
+        breathData.expFlow                  = getScaledValue(getSignedShort(dataRead,    mr.EXP_FLOW         ), mdScale.Flow)
+        breathData.demandFlow               = getScaledValue(getSignedShort(dataRead,    mr.DEMAND_FLOW      ), mdScale.Flow)
         return cmdRead, breathData       
     end 
 end
 
 -- this function reads in the vent data and parses it to its corresponding commands.
 -- note: this applies to the continuous wave function 
-function ft.readVentWave()
+local function readVentWave()
     local err, dataRead = p:read(read_len, timeout__ms)
     local wave = {}
-    assert(err == rs232.RS232_ERR_NOERROR)
+    --assert(err == rs232.RS232_ERR_NOERROR)
     if dataRead ~= nil then 
         printDebug(tohex(dataRead))
-        wd = FTI.para_get_waveData
+        wd = priFTI.para_get_waveData
         wave.Pressure = getSignedShort(dataRead,wd.Pressure) / mdScale.Pressure
         wave.Flow     = getSignedShort(dataRead,wd.Flow    ) / mdScale.Flow
         wave.etCO2    = getSignedShort(dataRead,wd.etCO2   ) / mdScale.etCO2 
@@ -172,53 +193,86 @@ function ft.readVentWave()
     end
 end
 
-
-local function oneByteChecksum (xCheckSum)
-    if xCheckSum >= 256 then
-        xCheckSum = xCheckSum % 256
-    end
-    return xCheckSum
-end
-
 -- This function dictates the 'number of bytes' value by checking
 -- how much data we intend to send to the vent
-function writeToSerial(xCommand, xDataByte1, xDataByte2)    
+local function writeToSerial(xCommand, xDataByte1, xDataByte2)    
     if p ~= nil then
         local numberBytes = 0x2
         local checkSum = numberBytes + xCommand
         if xDataByte1 == nil then
-            p:write(string.char(cmd.TERM_MSG_SOM, 
+            p:write(string.char(som.TERM_MSG_SOM, 
                                 numberBytes, 
                                 xCommand,
                                 oneByteChecksum(checkSum)), 
                                 timeout__ms)
-            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand,oneByteChecksum(checkSum))))
+            printDebug('writeToSerial: 0x' .. tohex(string.char(som.TERM_MSG_SOM, numberBytes, xCommand,oneByteChecksum(checkSum))))
         elseif xDataByte2 == nil then
             numberBytes = 0x3
             checkSum = numberBytes + xCommand + xDataByte1
-            p:write(string.char(cmd.TERM_MSG_SOM, 
+            p:write(string.char(som.TERM_MSG_SOM, 
                                 numberBytes, 
                                 xCommand, 
                                 xDataByte1,
                                 oneByteChecksum(checkSum)), 
                                 timeout__ms)
-            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, oneByteChecksum(checkSum)))) 
+            printDebug('writeToSerial: 0x' .. tohex(string.char(som.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, oneByteChecksum(checkSum)))) 
         else
             numberBytes = 0x4
             checkSum = numberBytes + xCommand + xDataByte1 + xDataByte2
-            p:write(string.char(cmd.TERM_MSG_SOM, 
+            p:write(string.char(som.TERM_MSG_SOM, 
                                 numberBytes, 
                                 xCommand, 
                                 xDataByte1, 
                                 xDataByte2, 
                                 oneByteChecksum(checkSum)), 
                                 timeout__ms)
-            printDebug('writeToSerial: 0x' .. tohex(string.char(cmd.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, xDataByte2, oneByteChecksum(checkSum)))) 
+            printDebug('writeToSerial: 0x' .. tohex(string.char(som.TERM_MSG_SOM, numberBytes, xCommand, xDataByte1, xDataByte2, oneByteChecksum(checkSum)))) 
         end 
     end
 end
+  
+local function writingToSerial(xCommand, xDef)
+	writeToSerial(xCommand)
+	local cmdUsed, data = readVentData()
+	local scaledData = data
+	if xDef.scale ~= nil then 
+	    scaledData = data / xDef.scale
+	end
+	if cmdUsed == xCommand and scaledData >= xDef.minimum and scaledData <= xDef.minimum then
+	    return scaledData
+	else 
+		print("An error has occured")
+	end
+	if (DEBUG ~= false) then print(scaledData) end 
+end
 
-function ft.openCOM(xPortName) 
+local function setValue (xCommand, xValue, xDef)
+    local ScaledValue, highByte, lowByte = nil
+	local isValid = (xValue >= xDef.minimum and xValue <= xDef.maximum)
+	if isValid then
+	    if xDef.scale ~= nil then 
+		    ScaledValue = xValue * xDef.scale
+			highByte, lowByte = SplitNumberIntoHiAndLowBytes(ScaledValue) 
+            writeToSerial(xCommand, highByte, lowByte)
+			checkForError()
+		else 
+		    writeToSerial(xCommand, xValue)
+			checkForError()
+		end
+	else
+	    print ("Out of range.")
+	end
+	checkForError()
+	return isValid
+end
+ 
+local function delay_sec(xSecond)  
+    local clock = os.clock
+    local t0 = clock()
+    while (clock() - t0) <= xSecond do end
+end
+
+local function openCOM(xPortName) 
     portError, p = rs232.open(xPortName)
     if portError == rs232.RS232_ERR_NOERROR then
         assert(p:set_baud_rate(rs232.RS232_BAUD_230400) == rs232.RS232_ERR_NOERROR)
@@ -233,1067 +287,572 @@ function ft.openCOM(xPortName)
     return portError
 end
 
-function ft.closeCOM()
+local function closeCOM()
     assert(p:close() == rs232.RS232_ERR_NOERROR)
 end
 
--- passes in a string and makes it into a string hex
--- @str: the string we intend to make into a string hex
-function tohex(str)
-    return (str:gsub('.', function (c)
-        return string.format('%02X', string.byte(c))
-    end))
+local function setVentMode(xMode)
+    return setValue (sd.TERMINAL_SET_VENT_MODE, xMode, def.mode)
 end
 
--- Will take a value that is hex and make it into a string
--- @str: the hex value we intend to make into a string
-function fromhex(str)
-    return (str:gsub('..', function (cc)
-        return string.char(tonumber(cc, 16))
-    end))
+local function setVetRunState(xOnOff)
+    return setValue (sd.TERMINAL_SET_VENT_RUNSTATE, xOnOff, def.onOffState)
 end
 
-function ft.setVentMode(xMode)
-    local isValid = (xMode >= range.modeMIN) and (xMode <= range.modeMAX)
-    if (isValid) then
-        writeToSerial(sd.TERMINAL_SET_VENT_MODE, xMode)
-        delay_sec(time_600ms)
-    else 
-        print ("ERROR: Attemped to set invalid Mode.")
-    end
-    return isValid
+local function setStateVLimit(xOnOff)
+    return setValue (sd.TERMINAL_SET_STATE_VLimit, xOnOff, def.onOffState)
 end
 
-function ft.setVetRunState(xOnOff)
-    if (xOnOff == range.ON or xOnOff == range.OFF) then 
-    writeToSerial(sd.TERMINAL_SET_VENT_RUNSTATE, xOnOff)
-    modeError()
-    else print ("Out of range.")
-    end
+local function setStateVGuarantee(xOnOff)  
+    return setValue (sd.TERMINAL_SET_STATE_VGarant, xOnOff, def.onOffState)
 end
 
-function ft.setStateVLimit(xOnOff)
-    if (xOnOff == range.OFF or xOnOff == range.ON) then 
-    writeToSerial(sd.TERMINAL_SET_STATE_VLimit, xOnOff)
-    modeError()
-    else print ("Out of range.")
-    end
+local function setStateBodyWeightRange(xRange)
+    return setValue (sd.TERMINAL_SET_PARAM_VentRange, xRange, def.VentRange)
 end
 
-function ft.setStateVGuarantee(xOnOff)  
-    if (xOnOff == range.OFF or xOnOff == range.ON) then 
-    writeToSerial(sd.TERMINAL_SET_STATE_VGarant, xOnOff)
-    modeError()
-    else print ("Out of range.")
-    end
+local function setIERatioHFO(xIERatio)
+    return setValue (sd.TERMINAL_SET_PARAM_IERatioHFO, xIERatio, def.IE)
 end
 
-function ft.setStateBodyWeightRange(xRange)
-    if (xRange == range.NEONATAL or xRange == range.PEDIATRIC) then 
-    writeToSerial(sd.TERMINAL_SET_PARAM_VentRange, xRange)
-    modeError()
-    else print ("Out of range.")
-    end
+local function setManBreathRunning(xOnOff)
+    return setValue (sd.TERMINAL_SET_MANBREATHrunning, xOnOff, def.onOffState)
 end
 
-function ft.setIERatioHFO(xIERatio)
-    if (xIERatio >= range.IEMIN and xIERatio <= range.IEMAX) then
-        writeToSerial(sd.TERMINAL_SET_PARAM_IERatioHFO, xIERatio)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setManBreathRunning(xOnOff)
-    if (xOnOff == range.OFF or xOnOff == range.ON) then 
-        writeToSerial(sd.TERMINAL_SET_MANBREATHrunning, xOnOff)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setStatePressureRiseControl(xMode)
-    if (xMode == range.RiseControlMIN or xMode == range.RiseControlMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PressureRiseCtrl, xMode)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setStatePressureRiseControl(xMode)
+    return setValue (sd.TERMINAL_SET_PressureRiseCtrl, xMode, def.RiseControl)
 end 
 
-function ft.setHFOFreqRec__hz(xFreq__hz)
-    if (xFreq__hz >= range.HFOFreqRecMIN and xFreq__hz <= range.HFOFreqRecMAX) then
-        if (xFreq__hz >= range.HFOFreqRec1 and xFreq__hz < range.HFOFreqRec1Half) then
-            xFreq__hz = range.HFOFreqRec1
-        elseif (xFreq__hz >= range.HFOFreqRec1Half and xFreq__hz < range.HFOFreqRec2Half) then
-            xFreq__hz = range.HFOFreqRec2
-        elseif (xFreq__hz >= range.HFOFreqRec2Half and xFreq__hz < range.HFOFreqRec3Half) then
-            xFreq__hz = range.HFOFreqRec3
-        else
-            xFreq__hz = range.HFOFreqRecMAX
-        end
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(xFreq__hz)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFOFreqRec, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOFreqRec__hz(xFreq__hz)
+    local isVaild = (xFreq__hz >= def.HFOFreqRec.minimum and xFreq__hz < def.HFOFreqRec.maximum or
+	                 xFreq__hz == hfrc.HFOFreqRec1 or xFreq__hz == hfrc.HFOFreqRec2 or
+		             xFreq__hz == hfrc.HFOFreqRec3 or xFreq__hz == hfrc.HFOFreqRec4  )
+    if isVaild then
+	    return setValue (sd.TERMINAL_SET_PARAM_HFOFreqRec, xFreq__hz, def.HFOFreqRec)
+	end
 end
 
-function ft.setHFOFlow__lpm(xFreq__lpm)
-    if (xFreq__lpm >= range.HFOFlowMIN and xFreq__lpm <= range.HFOFlowMAX) then
-        local freqScaled = xFreq__lpm * mdScale.Flow
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(freqScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFOFlow, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOFlow__lpm(xFreq__lpm)
+    return setValue (sd.TERMINAL_SET_PARAM_HFOFlow, xFreq__lpm, def.HFOFlow)
 end 
 
-function ft.setLeakCompensation(xLeak)
-    if (xLeak >= range.LeakCompMIN and xLeak <= range.LeakCompMAX) then 
-    writeToSerial(sd.TERMINAL_SET_LeakCompensation, xLeak)
-    modeError()
-    else print ("Out of range.")
-    end
+local function setLeakCompensation(xLeak)
+    return setValue (sd.TERMINAL_SET_LeakCompensation, xLeak, def.LeakComp)
 end 
 
-function ft.setPInsPressure__mbar(xPressure__mbar)
-    if (xPressure__mbar >= range.PInspPressMIN and xPressure__mbar <= range.PInspPressMAX) then 
-        local pressureScaled = xPressure__mbar * mdScale.Pressure
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pressureScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_PINSP, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setPInsPressure__mbar(xPressure__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_PINSP, xPressure__mbar, def.PInspPress)
 end
 
-function ft.setPeep__mbar(xPeep__mbar)
-    if (xPeep__mbar >= range.PEEPMIN and xPeep__mbar <= range.PEEPMAX) then 
-        local peepScaled = xPeep__mbar * mdScale.Peep
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(peepScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_PEEP, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setPeep__mbar(xPeep__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_PEEP, xPeep__mbar, def.PEEP)
 end
 
-function ft.setPSV__mbar(xPPSV__mbar)
-    if (xPPSV__mbar >= range.PPSVMIN and xPPSV__mbar <= range.PPSVMAX) then 
-        local ppsvScaled = xPPSV__mbar * mdScale.PPSVS
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ppsvScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_PPSV, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setPSV__mbar(xPPSV__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_PPSV, xPPSV__mbar, def.PPSV)
 end
 
-function ft.setBPM__bpm(xBreatheRate__bpm)
+local function setBPM__bpm(xBreatheRate__bpm)
     local highByte, lowByte = SplitNumberIntoHiAndLowBytes(xBreatheRate__bpm)
     writeToSerial(sd.TERMINAL_SET_PARAM_BPM, dataByte, lowByte)
-    modeError()
+    checkForError()
 end
 
-function ft.setHFOAmp__mbar(xAmp__mbar)
-    if (xAmp__mbar >= range.HFOAmpMIN and xAmp__mbar <= range.HFOAmpMAX) then 
-        local ampScaled = xAmp__mbar * mdScale.HFOAmp
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ampScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFAmpl, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOAmp__mbar(xAmp__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_HFAmpl, xAmp__mbar, def.HFOAmp)
 end
 
-function ft.setHFOAmpMax__mbar(xAmp__mbar)
-    if (xAmp__mbar >= range.HFOAmpMIN and xAmp__mbar <= range.HFOAmpMAX) then 
-        local ampScaled = xAmp__mbar * mdScale.HFOAmp
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(ampScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFAmplMax, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOAmpMax__mbar(xAmp__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_HFAmplMax, xAmp__mbar, def.HFOAmpMAX)
 end
 
-function ft.setHFOFreq__hz(xFreq__hz)
-    if (xFreq__hz >= range.HFOFreqMIN and xFreq__hz <= range.HFOFreqMAX) then 
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(xFreq__hz)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFFreq, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOFreq__hz(xFreq__hz)
+    return setValue (sd.TERMINAL_SET_PARAM_HFFreq, xFreq__hz, def.HFOFreq)
 end
 
-function ft.setO2(xO2)
-    if (xO2 >= range.O2MIN and xO2 <= range.O2MAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_O2, xO2)   
-        modeError()
-    else print ("Out of range.")
-    end
+local function setO2(xO2)
+    return setValue (sd.TERMINAL_SET_PARAM_O2, xO2, def.O2)
 end
 
-function ft.setIFlow__lpm(xIFlow__lpm)
-    if (xIFlow__lpm >= range.FlowMIN and xIFlow__lpm <= range.FlowMAX) then 
-        local IFlowScaled = xIFlow__lpm * mdScale.Flow
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(IFlowScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_IFlow, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setIFlow__lpm(xIFlow__lpm)
+    return setValue (sd.TERMINAL_SET_PARAM_IFlow, xIFlow__lpm, def.Flow)
 end
 
-function ft.setEFlow__lpm(xEFlow__lpm)
-    if (xEFlow__lpm >= range.FlowMIN and xEFlow__lpm <= range.FlowMAX) then 
-        local EFlowScaled = xEFlow__lpm * mdScale.Flow
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(EFlowScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_EFlow, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setEFlow__lpm(xEFlow__lpm)
+    return setValue (sd.TERMINAL_SET_PARAM_EFlow, xEFlow__lpm, def.Flow)
 end
 
-function ft.setRiseTime__sec(xTime__sec)
-    if (xTime__sec >= range.RiseTimeMIN and xTime__sec <= range.RiseTimeMAX) then 
-        local timeScaled = xTime__sec * mdScale.Time
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_RiseTime, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setRiseTime__sec(xTime__sec)
+    return setValue (sd.TERMINAL_SET_PARAM_RiseTime, xTime__sec, def.RiseTime)
 end
 
-function ft.setITime__sec(xTime__sec)
-    if (xTime__sec >= range.ITimeMIN and xTime__sec <= range.ITimeMAX) then 
-        local timeScaled = xTime__sec * mdScale.Time
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_ITime, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setITime__sec(xTime__sec)
+    return setValue (sd.TERMINAL_SET_PARAM_ITime, xTime__sec, def.ITime)
 end
 
-function ft.setETime__sec(xTime__sec)
-    if (xTime__sec >= range.ETimeMIN and xTime__sec <= range.ETimeMAX) then 
-        local timeScaled = xTime__sec * mdScale.Time
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(timeScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_ETime, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setETime__sec(xTime__sec)
+    return setValue (sd.TERMINAL_SET_PARAM_ETime, xTime__sec, def.ETime)
 end
 
-function ft.setHFOPMean__mbar(xPMean__mbar)
-    if (xPMean__mbar >= range.HFOPMeanMIN and xPMean__mbar <= range.HFOPMeanMAX) then 
-        local pmeanScaled = xPMean__mbar * mdScale.Pressure
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmeanScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFPMean, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setHFOPMean__mbar(xPMean__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_HFPMean, xPMean__mbar, def.HFOPMean)
 end
 
-function ft.setHFOPMeanRec__mbar(xPMean__mbar)
-    if (xPMean__mbar >= range.HFOPMeanMIN and xPMean__mbar <= range.HFOPMeanMAX) then 
-        local pmeanScaled = xPMean__mbar * mdScale.Pressure
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmeanScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_HFPMeanRec, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end 
+local function setHFOPMeanRec__mbar(xPMean__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_HFPMeanRec, xPMean__mbar, def.HFOPMean)
 end
 
-function ft.setVLimit__ml(xVLimit__ml)
-    if (xVLimit__ml >= range.VLimitMIN and xVLimit__ml <= range.VLimitMAX) then 
-        local vlimitScaled = xVLimit__ml * mdScale.Vol
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(vlimitScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_VLimit, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setVLimit__ml(xVLimit__ml)
+    return setValue (sd.TERMINAL_SET_PARAM_VLimit, xVLimit__ml, def.VLimit)
 end
 
-function ft.setVGuarantee__ml(xVGuarantee__ml)
-    if (xVGuarantee__ml >= range.VGuaranteeMIN and xVGuarantee__ml <= range.VGuaranteeMAX) then 
-        local vguaranteeScaled = xVGuarantee__ml * mdScale.Vol
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(vguaranteeScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_VGarant, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setVGuarantee__ml(xVGuarantee__ml)
+    return setValue (sd.TERMINAL_SET_PARAM_VGarant, xVGuarantee__ml, def.VGuarantee)
 end
 
-function ft.setAbortCriterionPSV__per(xPSV__per)
-    if (xPSV__per >= range.AbortPSVMIN and xPSV__per <= range.AbortPSVMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_AbortCriterionPSV, xPSV__per)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setAbortCriterionPSV__per(xPSV__per)
+    return setValue (sd.TERMINAL_SET_PARAM_AbortCriterionPSV, xPSV__per, def.AbortPSV) 
 end
 
-function ft.setTherapyFlow__lpm(xFlow__lpm)
-    if (xFlow__lpm >= range.TherapyFlowMIN and xFlow__lpm <= range.TherapyFlowMAX) then 
-        local flowScaled = xFlow__lpm * mdScale.Flow
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(flowScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_TherapieFlow, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+local function setTherapyFlow__lpm(xFlow__lpm)
+    return setValue (sd.TERMINAL_SET_PARAM_TherapieFlow, xFlow__lpm, def.TherapyFlow) 
+end
+
+local function setTrigger(xTrigger__senHigh)
+    return setValue (sd.TERMINAL_SET_PARAM_Trigger, xTrigger__senHigh, def.Trigger) 
+end
+
+local function setFlowMin__lpm(xFlow__lpm)
+    return setValue (sd.TERMINAL_SET_PARAM_Flowmin, xFlow__lpm, def.FlowMin) 
+end
+
+local function setCPAP__mbar(xCPAP__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_CPAP, xCPAP__mbar, def.CPAP) 
+end
+
+local function setPManuel__mbar(xPManuel__mbar)
+    return setValue (sd.TERMINAL_SET_PARAM_PManual, xPManuel__mbar, def.PManuel)
+end
+
+local function setBackup(xBackup)
+    return setValue (sd.TERMINAL_SET_PARAM_Backup, xBackup, def.Backup)
+end
+
+local function setITimeRec__sec(xITime__sec)
+    return setValue (sd.TERMINAL_SET_PARAM_ITimeRec, xITime__sec, def.ITimeRec)
+end
+
+local function setO2Flush(xO2Flush)
+    return setValue (sd.TERMINAL_SET_PARAM_O2_FLUSH, def.O2Flush)
+end
+
+local function setSPO2Low(xSPO2Low)
+    return setValue (sd.TERMINAL_SET_PARAM_SPO2LOW, def.SPO2Low)
+end
+
+local function setSPO2High(xSPO2High)
+    return setValue (sd.TERMINAL_SET_PARAM_SPO2HIGH, def.SPO2High)
+end
+
+local function setFIO2Low(xFIO2Low)
+    return setValue (sd.TERMINAL_SET_PARAM_FIO2LOW, def.FIO2Low)
+end
+
+local function setFIO2High(xFIO2High)
+    return setValue (sd.TERMINAL_SET_PARAM_FIO2HIGH, def.FIO2High)
+end
+
+local function setStatePrico(xOnOff)
+    return setValue (sd.TERMINAL_SET_STATE_PRICO, xOnOff, def.onOffState)
 end
 
 
-function ft.setTrigger(xTrigger__senHigh)
-    if (xTrigger__senHigh >= range.TriggerMIN and xTrigger__senHigh <= range.TriggerMAX) then 
-        local triggerScaled = xTrigger__senHigh * mdScale.Trigger
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(triggerScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_Trigger, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
-end
 
 
-function ft.setFlowMin__lpm(xFlow__lpm)
-    if (xFlow__lpm >= range.FlowMinuteMIN and xFlow__lpm <= range.FlowMinuteMAX) then 
-        local flowScaled = xFlow__lpm * mdScale.Flow
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(flowScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_Flowmin, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
+--[[
+setting_para = {
+   { name = "Breath Rate"     , cmd = sd.TERMINAL_SET_BREATH_RATE, min = , max = , scale = },
+   { name = "Inspiration Time", cmd = sd.TERMINAL_SET_BREATH_RATE, min = , max = , scale = },
+}
+
+local function setName(sd.TERMINAL_SET_STATE_PRICO, xOnOff, oos.OFF, xOnOff == oos.O)
+    return setValue (sd.TERMINAL_SET_STATE_PRICO, xOnOff, oos.OFF, xOnOff == oos.ON)
 end
 
-function ft.setCPAP__mbar(xCPAP__mbar) 
-    local isValid = (xCPAP__mbar >= range.CPAPMIN) and (xCPAP__mbar <= range.CPAPMAX)
-    if (isValid) then 
-        local scaledCPAP = xCPAP__mbar * mdScale.CPAP
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(scaledCPAP)
-        writeToSerial(sd.TERMINAL_SET_PARAM_CPAP, highByte, lowByte)
-        modeError()
-    else 
-	    assert(isValid, "ASSERT: Attempted to set invalid CPAP.")
-    end
+function set(xName)
+    if xName match setting_pare.name then
+	    setName(sd.TERMINAL_SET_STATE_PRICO, xOnOff, oos.OFF, xOnOff == oos.O)
+	do
 end
 
-function ft.setPManuel__mbar(xPManuel__mbar)
-    local isValid = (xPManuel__mbar >= range.PManuelMIN) and (xPManuel__mbar <= range.PManuelMAX)
-    if (isValid) then 
-        local pmanuelScaled = xPManuel__mbar * mdScale.PManuel
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(pmanuelScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_PManual, highByte, lowByte)
-        modeError()
-    else
-	    assert(isValid, "ASSERT: Attempted to set invalid Pmanual.")
-    end
+function setAndVerify(xName)
+    if xName match setting_pare.name then
+	    setName(sd.TERMINAL_SET_STATE_PRICO, xOnOff, oos.OFF, xOnOff == oos.O)
+	do
+	local result = getName(xName)
+	if result = false  assert("ERROR: Failed set Breath Rate at 10")
 end
+ft.setAndVerify("Breath Rate", 10)
+--]]
 
-function ft.setBackup(xBackup)
-    if (xBackup >= range.BackupMIN and xBackup <= range.BackupMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_Backup, xBackup)
-        modeError()
-    else print ("Out of range.")
-    end
-end
 
-function ft.setITimeRec__sec(xITime__sec)
-    if (xITime__sec >= range.ITimeRecMIN and xITime__sec <= range.ITimeRecMAX) then 
-        local itimeScaled = xITime__sec * mdScale.Time
-        local highByte, lowByte = SplitNumberIntoHiAndLowBytes(itimeScaled)
-        writeToSerial(sd.TERMINAL_SET_PARAM_ITimeRec, highByte, lowByte)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setO2Flush(xO2Flush)
-    if (xO2Flush >= range.O2FlushMIN and xO2Flush <= range.O2FlushMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_O2_FLUSH, xO2Flush)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setSPO2Low(xSPO2Low)
-    if (xSPO2Low >= range.SPO2LowMIN and xSPO2Low <= range.SPO2LowMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_SPO2LOW, xSPO2Low)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setSPO2High(xSPO2High)
-    if (xSPO2High >= range.SPO2HighMIN and xSPO2High <= range.SPO2HighMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_SPO2HIGH, xSPO2High)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setFIO2Low(xFIO2Low)
-    if (xFIO2Low >= range.FIO2LowMIN and xFIO2Low <= range.FIO2LowMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_FIO2LOW, xFIO2Low)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setFIO2High(xFIO2High)
-    if (xFIO2High >= range.FIO2HighMIN and xFIO2High <= range.FIO2HighMAX) then 
-        writeToSerial(sd.TERMINAL_SET_PARAM_FIO2HIGH, xFIO2High)
-        modeError()
-    else print ("Out of range.")
-    end
-end
-
-function ft.setStatePrico(xOnOff)
-    if (xOnOff == range.OFF or xOnOff == range.ON) then 
-        writeToSerial(sd.TERMINAL_SET_STATE_PRICO, xOnOff)
-        modeError()
-    else print ("Out of range.")
-    end
-end
 
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~GET VALUES~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+local function getContinuousData(xStartCmd, xStopCmd)
+   local cmdUsed,ventData = nil
+   if xStopCmd ~= nil then
+         writeToSerial(xStartCmd)
+		 cmdUsed,ventData = readVentBreath()
+		 writeToSerial(xStopCmd)
+   else
+        writeToSerial(xStartCmd)
+		cmdUsed,ventData = readVentBreath()
+   end
+   return cmdUsed,ventData
+end
 
+local function getContinuousWave(xStartCmd, xStopCmd)
+   local cmdUsed,ventData = nil
+   if xStopCmd ~= nil then
+         writeToSerial(xStartCmd)
+		 cmdUsed,ventData = readVentWave()
+		 writeToSerial(xStopCmd)
+   else
+        writeToSerial(xStartCmd)
+		cmdUsed,ventData = readVentWave()
+   end
+   return cmdUsed,ventData
+end
 
-function ft.getBTB()
-    writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
-    local cmdUsed, breathData = ft.readVentBreath()
-    if (cmdUsed == cmd.TERM_GET_MEASUREMENTS_ONCE_BTB) then
-        --does not print in order
-        for k, v in pairs(breathData) do
-            if (v == range.MissingValueLOW or 
-                v == range.MissingValueMID or 
-                v == range.MissingValueHIGH )then
-              else  
-                print(k .. " = " ..  v)
-            end 
-        end
+local function getBTB()
+    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
+    if (cmdUsed == cr.TERM_MEASUREMENTS_BTB) then
+		return breathData
     end
 end
 
-function ft.getContinousBTB(xIterations)
-    writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
-    writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINIOUS_BTB)
-    local cmdRead, breathData = nil
-    for  i = 1,   xIterations do
-        print ("---------------------------------------")
-        -- ft.delay_sec(1.4) --we need this delay here for the vent to send all the data
-        delay_sec(1.4)
-        cmdRead, breathData = ft.readVentBreath()
-        if (cmdRead == 0) then
-            for k, v in pairs(breathData) do
-                if (v == range.MissingValueLOW or 
-                    v == range.MissingValueMID or 
-                    v == range.MissingValueHIGH )then
-                else  
-                    print(k .. " = " ..  v)
-                end 
-            end
-        end
-    end
-    writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+local function getContinousBTB()
+    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_CONTINIOUS_BTB,cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+	return breathData
 end
--------------------------------------------------------
 
-
-function ft.getAVG()
-    writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
-    local cmdUsed, breathData = ft.readVentBreath()
-    if (cmdUsed == 2) then
-        --does not print in order
-        for k, v in pairs(breathData) do
-            if (v == range.MissingValueLOW or 
-                v == range.MissingValueMID or 
-                v == range.MissingValueHIGH )then
-              else  
-                print(k .. " = " ..  v)
-            end 
-        end
+local function getAVG()
+    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
+    if (cmdUsed == cr.TERM_MEASUREMENTS_AVG) then
+        return breathData
     end
 end
 
-function ft.getContinousAVG(xIterations)
-    writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
-    writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINUOUS_AVG)
-    local cmdRead, breathData = nil
-    for  i = 1,   xIterations do
-        print ("---------------------------------------")
-        ft.delay_sec(1.4) --we need this delay here for the vent to send all the data
-        cmdRead, breathData = ft.readVentBreath()
-        if (cmdRead == 2) then
-        --does not print in order
-
-            for k, v in pairs(breathData) do
-                if (v == range.MissingValueLOW or 
-                    v == range.MissingValueMID or 
-                    v == range.MissingValueHIGH )then
-                else  
-                    print(k .. " = " ..  v)
-                end 
-            end
-        end
+local function getContinousAVG()
+    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_CONTINUOUS_AVG, cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+    if (cmdUsed == cr.TERM_MEASUREMENTS_AVG) then
+        return breathData
     end
-    writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
-end
--------------------------------------------------------
-function ft.getContinousWaveData(xIterations)
-    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
-    writeToSerial(cmd.TERM_GET_WAVE_DATA)
-    local cmdRead, wave = nil
-    for  i = 1,   xIterations do
-        print ("---------------------------------------")
-        cmdRead, wave = ft.readVentWave()
-        if wave ~= nil then
-            for k, v in pairs(wave) do
-                if (v == range.MissingValueLOW or 
-                    v == range.MissingValueMID or 
-                    v == range.MissingValueHIGH )then
-                else  
-                    print(k .. " = " ..  v)
-                end 
-            end
-        end
-    end
-    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
 end
 
--------------------------------------------------------
-function ft.getWaveData(xIterations)
-    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
-    writeToSerial(cmd.TERM_GET_WAVE_DATA)
-    print('wavePressure, waveFlow, waveETCO2')
-    for  i = 1,   xIterations do
-        local cmdRead, wave = ft.readVentWave()
-        local scale = FTI.measuredData_ScaleFactor.etCO2
-        if wave ~= nil then
-            print(wave.Pressure .. ', ' .. wave.Flow .. ', ' .. wave.etCO2 )
-        end
-    end
-    writeToSerial(cmd.TERM_STOP_WAVE_DATA)
+local function getContinousWaveData()
+    local cmdUsed, waveData = getContinuousWave(cmd.TERM_GET_WAVE_DATA, cmd.TERM_STOP_WAVE_DATA)
+	return waveData 
 end
 
--------------------------------------------------------
-function ft.getVentMode()
-    writeToSerial(cmd.TERM_GET_VENT_MODE)
-    local _, mode = ft.readVentData()
-    return mode
+local function getVentMode()
+    return writingToSerial(cmd.TERM_GET_VENT_MODE,def.mode)
 end
 
-function ft.getModeOption1()
+local function getModeOption1()
     writeToSerial(vs.TERMINAL_GET_MODE_OPTION1)
-    print(ft.readVentData() )
+    print(readVentData() )
 end
 
-function ft.getModeOption2()
+local function getModeOption2()
     writeToSerial(vs.TERMINAL_GET_MODE_OPTION2)
-    print(ft.readVentData() )
+    print(readVentData() )
 end
 
-function ft.getRunState()
-    writeToSerial(vs.TERMINAL_GET_VENT_RUNSTATE)
-    local cmdUsed, data = ft.readVentData()
-    
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_VENT_RUNSTATE)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end 
-    end
+local function getRunState()
+    return writingToSerial(vs.TERMINAL_GET_VENT_RUNSTATE, def.onOffState)
 end
 
-function ft.getStateVLimit()
-    writeToSerial(vs.TERMINAL_GET_STATE_VLimit)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_STATE_VLimit)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end 
-    else print("Volume Limit is not selected")
-    end
+local function getStateVLimit()
+    return writingToSerial(vs.TERMINAL_GET_STATE_VLimit,def.onOffState)
 end
 
-function ft.getStateVGuarentee()
-    writeToSerial(vs.TERMINAL_GET_STATE_VGarant)   
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_STATE_VGarant)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end 
-    else print("Volume Limit is not selected")
-    end
+local function getStateVGuarentee()
+    return writingToSerial(vs.TERMINAL_GET_STATE_VGarant,def.onOffState)
 end
 
-function ft.getVentRange()
-    writeToSerial(vs.TERMINAL_GET_PARAM_VentRange) 
-    local cmdUsed, data,hex = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_VentRange)) then
-        if (data == range.NEONATAL or data == range.PEDIATRIC) then
-            return data
-        else print("An error has occured")
-        end
-    end
+local function getVentRange()
+return writingToSerial(vs.TERMINAL_GET_PARAM_VentRange,def.VentRange)
 end
 
-function ft.getIERatioHFO()
-    writeToSerial(vs.TERMINAL_GET_PARAM_IERatioHFO)    
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_IERatioHFO)) then
-        if (data >= range.IEMIN and data <= range.IEMAX) then
-            return data
-        else print("An error has occured")
-        end
-    end
+local function getIERatioHFO()
+	return writingToSerial(vs.TERMINAL_GET_PARAM_IERatioHFO,def.IE)
 end
 
-function ft.getManBreathRunning()
-    writeToSerial(vs.TERMINAL_GET_MANBREATHrunning)    
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_MANBREATHrunning)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end
-    end
+local function getManBreathRunning()
+    return writingToSerial(vs.TERMINAL_GET_MANBREATHrunning,def.onOffState)
 end
 
-function ft.getPressureRiseControl()
-    writeToSerial(vs.TERMINAL_GET_PressureRiseCtrl)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PressureRiseCtrl)) then
-            if (data == range.RiseControlMIN or data == range.RiseControlMAX) then
-            return data
-        else print("An error has occured")
-        end
-    end
+local function getPressureRiseControl()
+    return writingToSerial(vs.TERMINAL_GET_PressureRiseCtrl,def.RiseControl)
 end
 
-function ft.getHFOFreqRec()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFOFreqRec)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFOFreqRec)) then
-        if (data >= range.HFOFreqRecMIN and data <= range.HFOFreqRecMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    else print("HFO mode not selected")
-    end
-    
+local function getHFOFreqRec()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFOFreqRec,def.HFOFreqRec)
 end
 
-function ft.getHFOFlow()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFOFlow)
-    local cmdUsed, data, allData = ft.readVentData()
-    local scaledData = data / mdScale.Flow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFOFlow)) then
-        if (scaledData >= range.HFOFlowMIN and scaledData <= range.HFOFlowMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    else print("HFO mode not selected")
-    end
+local function getHFOFlow()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFOFlow,HFOFlow)
 end
 
 
-function ft.getLeakCompensation()
-    writeToSerial(vs.TERMINAL_GET_LeakCompensation)    
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_LeakCompensation)) then
-        if (data >= range.LeakCompMIN and data <= range.LeakCompMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end
+local function getLeakCompensation()
+    return writingToSerial(vs.TERMINAL_GET_LeakCompensation,def.LeakComp)
 end
 
-function ft.getTriggerOption()
-    writeToSerial(vs.TERMINAL_GET_TriggerOption)   
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_TriggerOption)) then
-        if (data >= range.TriggerMIN and data <= range.TriggerMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end
+local function getTriggerOption()
+    return writingToSerial(vs.TERMINAL_GET_TriggerOption,def.Trigger)
 end
 
-function ft.getFOTOscillationState()
-    writeToSerial(vs.TERMINAL_GET_FOToscillationState)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_FOToscillationState)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end 
-    end
+local function getFOTOscillationState()
+    return writingToSerial(vs.TERMINAL_GET_FOToscillationState,def.onOffState)
 end
 
-function ft.getPInsPressure()
-    writeToSerial(vs.TERMINAL_GET_PARAM_PINSP)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Pressure
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PINSP)) then
-        if (scaledData >= range.PInspPressMIN and scaledData <= range.PInspPressMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end
+local function getPInsPressure()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_PINSP,def.PInspPress)
 end
 
-function ft.getPeep()
-    writeToSerial(vs.TERMINAL_GET_PARAM_PEEP)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Peep
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PEEP)) then
-        if (scaledData >= range.PEEPMIN and scaledData <= range.PEEPMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end
+local function getPeep()
+	return writingToSerial(vs.TERMINAL_GET_PARAM_PEEP,def.PEEP)
 end
 
-function ft.getPPSV()
-    writeToSerial(vs.TERMINAL_GET_PARAM_PPSV)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.PPSVS
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PPSV)) then
-        if (scaledData >= range.PPSVMIN and scaledData <= range.PPSVMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end
+local function getPPSV()
+	return writingToSerial(vs.TERMINAL_GET_PARAM_PPSV,def.PPSV)
 end
-
 -------------------- THIS IS NOT WORKING PROPERLY-------------------
-function ft.getBPM()
+local function getBPM()
     writeToSerial(vs.TERMINAL_GET_PARAM_BPM) 
-    print(ft.readVentData() )
+    print(readVentData() )
 end
 --------------------------------------------------------------------
-function ft.getHFOAmpl()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFAmpl)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.HFOAmp
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFAmpl)) then
-        if (scaledData >= range.HFOAmpMIN and scaledData <= range.HFOAmpMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end
+local function getHFOAmpl()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFAmpl,def.HFOAmp)
 end
 
-function ft.getHFOAmplMax()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFAmplMax)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.HFOAmp
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFAmplMax)) then
-        if (scaledData >= range.HFOAmpMIN and scaledData <= range.HFOAmpMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getHFOAmplMax()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFAmplMax,def.HFOAmpMAX)
 end
 
-function ft.getHFOFreq()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFFreq)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFFreq)) then
-        if (data >= range.HFOFreqMIN and data <= range.HFOFreqMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getHFOFreq()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFFreq,def.HFOFreq) 
 end
 
-function ft.getO2() 
-    writeToSerial(vs.TERMINAL_GET_PARAM_O2)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_O2)) then
-        if (data >= range.O2MIN and data <= range.O2MAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getO2() 
+    return writingToSerial(vs.TERMINAL_GET_PARAM_O2,def.O2) 
 end
 
-function ft.getIFlow()
-    writeToSerial(vs.TERMINAL_GET_PARAM_IFlow)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Flow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_IFlow)) then
-        if (scaledData >= range.FlowMIN and scaledData <= range.FlowMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getIFlow()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_IFlow,def.Flow) 
 end
 
-function ft.getEFlow()
-    writeToSerial(vs.TERMINAL_GET_PARAM_EFlow)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Flow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_EFlow)) then
-        if (scaledData >= range.FlowMIN and scaledData <= range.FlowMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getEFlow()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_EFlow,def.Flow)
 end
 
-function ft.getRiseTime()
-    writeToSerial(vs.TERMINAL_GET_PARAM_Risetime)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Time
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_Risetime)) then
-        if (scaledData >= range.RiseTimeMIN and scaledData <= range.RiseTimeMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getRiseTime()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_Risetime,def.RiseTime)
 end
 
-function ft.getITime()
-    writeToSerial(vs.TERMINAL_GET_PARAM_ITime)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Time
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_ITime)) then
-        if (scaledData >= range.ITimeMIN and scaledData <= range.ITimeMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getITime()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_ITime,def.ITime)
 end
 
-function ft.getETime()
-    writeToSerial(vs.TERMINAL_GET_PARAM_ETime)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Time
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_ETime)) then
-        if (scaledData >= range.ETimeMIN and scaledData <= range.ETimeMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getETime()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_ETime,def.ETime)
 end
 
-function ft.getHFOPMean()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFPMean)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Pressure
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFPMean)) then
-        if (scaledData >= range.HFOPMeanMIN and scaledData <= range.HFOPMeanMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getHFOPMean()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFPMean,def.HFOPMean)
 end
 
-function ft.getHFOPMeanRec()
-    writeToSerial(vs.TERMINAL_GET_PARAM_HFPMeanRec)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Pressure
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_HFPMeanRec)) then
-        if (scaledData >= range.HFOPMeanMIN and scaledData <= range.HFOPMeanMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getHFOPMeanRec()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_HFPMeanRec,def.HFOPMean)
 end
 
-function ft.getParamVLimit()
-    writeToSerial(vs.TERMINAL_GET_PARAM_VLimit)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Vol
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_VLimit)) then
-        if (scaledData >= range.VLimitMIN and scaledData <= range.VLimitMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getParamVLimit()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_VLimit,def.VLimit)
 end
 
-function ft.getParamVGuarantee()
-    writeToSerial(vs.TERMINAL_GET_PARAM_VGarant)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Vol
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_VGarant)) then
-        if (scaledData >= range.VGuaranteeMIN and scaledData <= range.VGuaranteeMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getParamVGuarantee()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_VGarant,def.VGuarantee)
 end
 
-function ft.getAbortCriterionPSV()
-    writeToSerial(vs.TERMINAL_GET_PARAM_AbortCriterionPSV)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_AbortCriterionPSV)) then
-        if (data >= range.AbortPSVMIN and data <= range.AbortPSVMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getAbortCriterionPSV()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_AbortCriterionPSV,def.AbortPSV)
 end
 
-function ft.getTherapyFlow()
-    writeToSerial(vs.TERMINAL_GET_PARAM_TherapieFlow)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Flow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_TherapieFlow)) then
-        if (scaledData >= range.TherapyFlowMIN and scaledData <= range.TherapyFlowMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getTherapyFlow()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_TherapieFlow,def.TherapyFlow)
 end
 
-function ft.getTrigger()
-    writeToSerial(vs.TERMINAL_GET_PARAM_Trigger)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.TriggerVolumeFlow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_Trigger)) then
-        if (scaledData >= range.TriggerMIN and scaledData <= range.TriggerMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getTrigger()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_Trigger,def.Trigger)
 end
 
-function ft.getFlowMin()
-    writeToSerial(vs.TERMINAL_GET_PARAM_Flowmin)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Flow
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_Flowmin)) then
-        if (scaledData >= range.FlowMinuteMIN and scaledData <= range.FlowMinuteMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getFlowMin()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_Flowmin,def.FlowMin)
 end
 
-function ft.getCPAP()
-    writeToSerial(vs.TERMINAL_GET_PARAM_CPAP)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.CPAP
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_CPAP)) then
-        if (scaledData >= range.CPAPMIN and scaledData <= range.CPAPMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    else print("CPAP / NCPAP mode not selected")
-    end 
+local function getCPAP()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_CPAP,def.CPAP)
 end
 
-function ft.getPManuel()
-    writeToSerial(vs.TERMINAL_GET_PARAM_PManual)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.PManuel
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_PManual)) then
-        if (scaledData >= range.PManuelMIN and scaledData <= range.PManuelMAX) then
-            return scaledData   
-        else print("An error has occured getPManuel")
-        end
-    end 
+local function getPManuel()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_PManual,def.PManuel)
 end
 
-function ft.getBackup()
-    writeToSerial(vs.TERMINAL_GET_PARAM_Backup)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_Backup)) then
-        if (data >= range.BackupMIN and data <= range.BackupMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getBackup()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_Backup,def.Backup)
 end
 
-function ft.getITimeRec()
-    writeToSerial(vs.TERMINAL_GET_PARAM_ITimeRec)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Time
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_ITimeRec)) then
-        if (scaledData >= range.ITimeRecMIN and scaledData <= range.ITimeRecMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    else print("HFO mode not selected")
-    end 
+local function getITimeRec()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_ITimeRec,def.ITimeRec)
 end
 
-function ft.getETimeRec()
-    writeToSerial(vs.TERMINAL_GET_PARAM_ETIMERec)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.Time
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_ETIMERec)) then
-        if (scaledData >= range.ETimeRecMIN and scaledData <= range.ETimeRecMAX) then 
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getETimeRec()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_ETIMERec,def.ETimeRec)
 end
 
-function ft.getSPO2Low()
-    writeToSerial(vs.TERMINAL_GET_PARAM_SPO2LOW)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_SPO2LOW)) then
-        if (data >= range.SPO2LowMIN and data <= range.SPO2LowMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getSPO2Low()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_SPO2LOW,def.SPO2Low)
 end
 
-function ft.getSPO2High()
-    writeToSerial(vs.TERMINAL_GET_PARAM_SPO2HIGH)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_SPO2HIGH)) then
-        if (data >= range.SPO2HighMIN and data <= range.SPO2HighMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+local function getSPO2High()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_SPO2HIGH,def.SPO2High)
 end
 
-function ft.getFIO2Low()
-    writeToSerial(vs.TERMINAL_GET_PARAM_FIO2LOW)
-    local cmdUsed, data = ft.readVentData()
-    local scaledData = data / mdScale.FIO2
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_FIO2LOW)) then
-        if (scaledData >= range.FIO2LowMIN and scaledData <= range.FIO2LowMAX) then
-            return scaledData   
-        else print("An error has occured")
-        end
-    end 
+local function getFIO2Low()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_FIO2LOW,def.FIO2Low)
 end
 
-function ft.getFIO2High()
-    writeToSerial(vs.TERMINAL_GET_PARAM_FIO2HIGH)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_PARAM_FIO2HIGH)) then
-        if (data >= range.FIO2HighMIN and data <= range.FIO2HighMAX) then
-            return data 
-        else print("An error has occured")
-        end
-    end 
+function getFIO2High()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_FIO2HIGH,def.FIO2High)
 end
 
-function ft.getPRICO()
-    writeToSerial(vs.TERMINAL_GET_STATE_PRICO)
-    local cmdUsed, data = ft.readVentData()
-    if (cmdUsed == tonumber(vs.TERMINAL_GET_STATE_PRICO)) then
-        if (data == range.ON or data == range.OFF) then
-            return data
-        else print("An error has occured")
-        end 
-    end 
+local function getPRICO()
+    return writingToSerial(vs.TERMINAL_GET_STATE_PRICO,def.onOffState)
 end
 
+-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Publish Public Interface
+--------------------------------------------------------------------------------
 
+ft = {
+	openCOM						    = openCOM,
+	closeCOM					    = closeCOM,
+	delay_sec                       = delay_sec,
+	-------------------------SET FUNCTIONS-------------------------
+	setVetRunState                  = setVetRunState,
+    setStateVLimit					= setStateVLimit,
+    setStateVGuarantee				= setStateVGuarantee,
+    setStateBodyWeightRange			= setStateBodyWeightRange,
+    setIERatioHFO					= setIERatioHFO,
+    setManBreathRunning				= setManBreathRunning,
+    setStatePressureRiseControl		= setStatePressureRiseControl,
+    setHFOFreqRec__hz				= setHFOFreqRec__hz,
+    setHFOFlow__lpm					= setHFOFlow__lpm,
+    setLeakCompensation				= setLeakCompensation,
+    setPInsPressure__mbar			= setPInsPressure__mbar,
+    setPeep__mbar					= setPeep__mbar,
+    setPSV__mbar					= setPSV__mbar,
+    setBPM__bpm						= setBPM__bpm,
+    setHFOAmp__mbar					= setHFOAmp__mbar,
+    setHFOAmpMax__mbar				= setHFOAmpMax__mbar,
+    setHFOFreq__hz					= setHFOFreq__hz,
+    setO2							= setO2,
+    setIFlow__lpm					= setIFlow__lpm,
+    setEFlow__lpm					= setEFlow__lpm,
+    setRiseTime__sec				= setRiseTime__sec,
+    setITime__sec					= setITime__sec,
+    setETime__sec					= setETime__sec,
+    setHFOPMean__mbar				= setHFOPMean__mbar,
+    setHFOPMeanRec__mbar			= setHFOPMeanRec__mbar,
+    setVLimit__ml					= setVLimit__ml,
+    setVGuarantee__ml				= setVGuarantee__ml,
+    setAbortCriterionPSV__per		= setAbortCriterionPSV__per,
+    setTherapyFlow__lpm				= setTherapyFlow__lpm,
+    setTrigger						= setTrigger,
+    setFlowMin__lpm					= setFlowMin__lpm,
+    setCPAP__mbar					= setCPAP__mbar,
+    setPManuel__mbar				= setPManuel__mbar,
+    setBackup						= setBackup,
+    setITimeRec__sec				= setITimeRec__sec,
+    setO2Flush						= setO2Flush,
+    setSPO2Low						= setSPO2Low,
+    setSPO2High						= setSPO2High,
+    setFIO2Low						= setFIO2Low,
+    setFIO2High						= setFIO2High,
+    setStatePrico					= setStatePrico,
+    -------------------------GET FUNCTIONS-------------------------
+    getBTB   						= getBTB,
+    getContinousBTB					= getContinousBTB,
+    getAVG							= getAVG,
+    getContinousAVG					= getContinousAVG,
+    getContinousWaveData			= getContinousWaveData,
+    getWaveData 					= getWaveData,
+    getVentMode 					= getVentMode,
+    getModeOption1					= getModeOption1,
+    getModeOption2 					= getModeOption2,
+    getRunState						= getRunState,
+    getStateVLimit					= getStateVLimit,
+    getStateVGuarentee				= getStateVGuarentee,
+    getVentRange					= getVentRange,
+    getIERatioHFO					= getIERatioHFO,
+    getManBreathRunning				= getManBreathRunning,
+    getPressureRiseControl			= getPressureRiseControl,
+    getHFOFreqRec					= getHFOFreqRec,
+    getHFOFlow						= getHFOFlow,
+    getLeakCompensation				= getLeakCompensation,
+    getTriggerOption				= getTriggerOption,
+    getFOTOscillationState			= getFOTOscillationState,
+    getPInsPressure					= getPInsPressure,
+    getPeep							= getPeep,
+    getPPSV							= getPPSV,
+    getBPM							= getBPM,
+    getHFOAmpl						= getHFOAmpl,
+    getHFOAmplMax					= getHFOAmplMax,
+    getHFOFreq						= getHFOFreq,
+    getO2							= getO2,
+    getIFlow						= getIFlow,
+    getEFlow						= getEFlow,
+    getRiseTime						= getRiseTime,
+    getITime						= getITime,
+    getETime						= getETime,
+    getHFOPMean						= getHFOPMean,
+    getHFOPMeanRec					= getHFOPMeanRec,
+    getParamVLimit					= getParamVLimit,
+    getParamVGuarantee				= getParamVGuarantee,
+    getAbortCriterionPSV			= getAbortCriterionPSV,
+    getTherapyFlow					= getTherapyFlow,
+    getTrigger						= getTrigger,
+    getFlowMin						= getFlowMin,
+    getCPAP							= getCPAP,
+    getPManuel						= getPManuel,
+    getBackup						= getBackup,
+    getITimeRec						= getITimeRec,
+    getETimeRec						= getETimeRec,
+    getSPO2Low						= getSPO2Low,
+    getSPO2High						= getSPO2High,
+    getFIO2High						= getFIO2High,
+    getPRICO						= getPRICO,
 
-
-
-
+}
 
 return ft
+
+
 

@@ -2,68 +2,10 @@
 -- (c) Copyright 2019 Vyaire Medial, or one of its subsidiaries.
 --     All Rights Reserved.
 ------------------------------------------------------------------------------
--- Define fabian Terminal Interface
+-- Private Define fabian Terminal Interface
 ------------------------------------------------------------------------------
 
-local ventMode = {
-    NONE      =  0,
-    IPPV      =  1,
-    SIPPV     =  2,
-    SIMV      =  3,
-    SIMVPSV   =  4,
-    PSV       =  5,
-    CPAP      =  6,
-    NCPAP     =  7,
-    DUOPAP    =  8,
-    HFO       =  9,
-    O2Therapy = 10,
-    SERVICE   = 15
-}
-
-local ModeOption1 = {
-    StartStopBit                         = 0,  -- 0=Start, 1=Stop
-    StateVolumnGuaranteeBit              = 1,  -- 0=off, 1=on
-    StateVolumnLimitBit                  = 2,  -- 0=off, 1=on
-    VentilatorRangeBit                   = 3,  -- 0=NEONATAL, 1=PEDIATRIC
-    FlowSensorCalibrationRunningBit      = 4,
-    O2CompensationEnabledBit             = 5,
-    ExhalationValveCalibrationRunningBit = 6,
-    TriggerModeBit                       = 7,  -- 0=Volumetrigger, 1=Flowtrigger
-    CalibrationProcess_21_O2_RunningBit  = 8,
-    CalibrationProcess_100_O2_RunningBit = 9,
-    TubeSet_InfantFlow_MediJetBit        = 10,  -- NCPAP/DUOPAP
-                                                -- xxxx 00xx xxxx xxxx = InfantFlow
-                                                -- xxxx 01xx xxxx xxxx = MediJet
-    TubeSet_InfantFlowLPBit              = 11,  -- xxxx 10xx xxxx xxxx = InfantFlowLP
-                                                -- xxxx 11xx xxxx xxxx = others notdef
-    IERatioHFOBit11                      = 12,  -- Bit 12+13: I:E Ratio HFO:
-                                                -- xx00 xxxx xxxx xxxx = 1:3
-                                                -- xx01 xxxx xxxx xxxx = 1:2
-    IERatioHFOBit12                      = 13,  -- xx10 xxxx xxxx xxxx = 1:1
-                                                -- xx11 xxxx xxxx xxxx = others notdef
-    InternalUseBit                       = 14,
-    ManualBreathRunningBit               = 15
-}
-
-local ModeOption2 = {
-    PressureRiseControlBit0  = 0,          -- xxxx xx00 = I-Flow
-    PressureRiseControlBit1  = 1,          -- xxxx xx01 = 01=Ramp
-                                           -- xxxx xx10 = AutoIFlow
-                                           -- xxxx xx11 = others notdef
-    HFORecruitmentBit        = 2,          -- 0=off, 1==on
-    HFOFlowBit               = 3,          -- 0=off, 1==on
-    ReservedBit              = 4,          -- not used
-    BiasFlowBit              = 5,          -- 0==internal, 1 == external
-    TriggerModeBit6          = 6,          -- xxx0 00xx xxxx = volume trigger
-    TriggerModeBit7          = 7,          -- xxx0 01xx xxxx = flow trigger
-    TriggerModeBit8          = 8,          -- xxx0 10xx xxxx = pressure trigger
-                                           -- xxx0 xxxx xxxx = for future setting
-    FOTOscillationRunningBit = 9,         
-    LeakCompensationBit10    = 10,         -- 00xx xxxx xxxx = off
-    LeakCompensationBit11    = 11,         -- 01xx xxxx xxxx = low
-                                            -- 10xx xxxx xxxx = middle
-                                            -- 11xx xxxx xxxx = high
-}
+--pubFTI = require "FTI-Public-Define"
 
 local para_get_VentSettings = {
     TERMINAL_GET_VENT_RUNSTATE           = 0x09,
@@ -196,87 +138,18 @@ local para_get_waveData = {
     etCO2    = 7,
 }
 
-local range = {
-    modeMIN                =     ventMode.IPPV,
-    modeMAX                =     ventMode.O2Therapy,
-    OFF                    =     0,
-    ON                     =     1,
-    NEONATAL               =     1,
-    PEDIATRIC              =     2,
-    IEMIN                  =     0,
-    IEMAX                  =     2,
-    RiseControlMIN         =     0,
-    RiseControlMAX         =     1,
-    HFOFreqRecMIN          =     0,
+local errorValue = {
+    TERMINAL_NOTVALID      = 32771,  -- -32765 after converted to signed
+	TERM_PARAM_NOSUPPORT   = 0xFD,
+    TERM_PARAM_OUTOFFRANGE = 0xFF,
+}
+
+local hfoFreqRecCondition = {
     HFOFreqRec1            =    60,
-    HFOFreqRec1Half        =    90,
     HFOFreqRec2            =   120,
-    HFOFreqRec2Half        =   150,
     HFOFreqRec3            =   180,
-    HFOFreqRec3Half        =   210,
-    HFOFreqRecMAX          =   240,   
-    HFOFlowMIN             =     5,
-    HFOFlowMAX             =    20,
-    LeakCompMIN            =     0,
-    LeakCompMAX            =     3,
-    PInspPressMIN          =     4,
-    PInspPressMAX          =    80,
-    PEEPMIN                =     0,
-    PEEPMAX                =    30,    
-    PPSVMIN                =     2,
-    PPSVMAX                =    80,    
-    HFOAmpMIN              =     5,
-    HFOAmpMAX              =   100,   
-    HFOFreqMIN             =     5,
-    HFOFreqMAX             =    20,
-    O2MIN                  =    21,
-    O2MAX                  =   100,
-    FlowMIN                =     1,
-    FlowMAX                =    32,        
-    RiseTimeMIN            =     0.1,
-    RiseTimeMAX            =     2, 
-    ITimeMIN               =     1,
-    ITimeMAX               =     2, 
-    ETimeMIN               =     0.2,
-    ETimeMAX               =    30,    
-    HFOPMeanMIN            =     7,
-    HFOPMeanMAX            =    50,    
-    VLimitMIN              =     1,
-    VLimitMAX              =   150,   
-    VGuaranteeMIN          =     0.8,
-    VGuaranteeMAX          =    60,    
-    AbortPSVMIN            =     1,
-    AbortPSVMAX            =    85,    
-    TherapyFlowMIN         =     0,
-    TherapyFlowMAX         =    15,
-    TriggerMIN             =     1,
-    TriggerMAX             =    10,    
-    FlowMinuteMIN          =     4,
-    FlowMinuteMAX          =    16,
-    CPAPMIN                =     1,
-    CPAPMAX                =    30,    
-    PManuelMIN             =     1,
-    PManuelMAX             =    80,    
-    BackupMIN              =     0,
-    BackupMAX              =     5, 
-    ITimeRecMIN            =     0,
-    ITimeRecMAX            =   160,
-    ETimeRecMIN            =     0,
-    ETimeRecMAX            =   160,   
-    O2FlushMIN             =    23,
-    O2FlushMAX             =   100,   
-    SPO2LowMIN             =     0,
-    SPO2LowMAX             =    98,    
-    SPO2HighMIN            =     1,
-    SPO2HighMAX            =   100,   
-    FIO2LowMIN             =     0,
-    FIO2LowMAX             =    98,    
-    FIO2HighMIN            =     1,
-    FIO2HighMAX            =   100,   
-    MissingValueLOW        =    32.771,
-    MissingValueMID        =  3277.1,
-    MissingValueHIGH       = 32771,
-    }
+	HFOFreqRec4            =   240,  
+}
 
 local measuredData_ScaleFactor = {
     Pressure                   = 10,
@@ -301,40 +174,83 @@ local measuredData_ScaleFactor = {
     Time                       = 1000,
     Trigger                    = 2580,
     }
+	
+local continuousRespond = {
+    TERM_MEASUREMENTS_BTB                = 0x00, 
+    TERM_MEASUREMENTS_AVG                = 0x02, 
+} 
+local SOM = {
+    TERM_MSG_SOM                         = 0x02,
+}
 
 local command = {
-    TERM_STOP_CONTINUOUS_MEASUREMENTS    = 0x50,
-    TERM_STOP_WAVE_DATA                  = 0x51,
-    TERM_MSG_SOM                         = 0x02,
-    TERM_PARAM_NOSUPPORT                 = 0xFD,
-    TERM_PARAM_OUTOFFRANGE               = 0xFF,
+
     TERM_GET_MEASUREMENTS_ONCE_BTB       = 0x00,
     TERM_GET_MEASUREMENTS_CONTINIOUS_BTB = 0x01,
     TERM_GET_MEASUREMENTS_ONCE_AVG       = 0x02,
     TERM_GET_MEASUREMENTS_CONTINIOUS_AVG = 0x03,
-    TERM_MEASUREMENTS_BTB                = 0x00,
-    TERM_MEASUREMENTS_AVG                = 0x02,
     TERM_GET_WAVE_DATA                   = 0x04,
     TERM_GET_VENT_MODE                   = 0x05,
     TERM_GET_MODE_OPTION1                = 0x06,
     TERM_GET_MODE_OPTION2                = 0x07,
-    TERM_WAVE_DATA                       = 0x04,
-    TERM_VENT_MODE                       = 0x05,
-    TERM_MODE_OPTION1                    = 0x06,
-    TERM_MODE_OPTION2                    = 0x07,
+	TERM_STOP_CONTINUOUS_MEASUREMENTS    = 0x50,
+    TERM_STOP_WAVE_DATA                  = 0x51,
 }
+
+local def = {
+    mode        = { minimum = pubFTI.ventMode.IPPV       , maximum = pubFTI.ventMode.O2Therapy    , scale = nil },
+	IE 			= { minimum = 0				             , maximum = 2                            , scale = nil },
+	RiseControl = { minimum = pubFTI.riseControl.iFlow   , maximum = 2                            , scale = nil },
+	HFOFreqRec  = { minimum = 0                          , maximum = 60                           , scale = nil },
+	HFOFlow     = { minimum = 5                          , maximum = 20                           , scale = 1000 },
+	LeakComp    = { minimum = 0                          , maximum = 3                            , scale = nil },
+	PInspPress  = { minimum = 4                          , maximum = 80                           , scale = 10 },
+	PEEP        = { minimum = 0                          , maximum = 30                           , scale = 10 },
+	PPSV        = { minimum = 2                          , maximum = 80                           , scale = 10 },
+	HFOAmp      = { minimum = 5                          , maximum = 100                          , scale = 10 },
+	HFOAmpMAX   = { minimum = 5                          , maximum = 100                          , scale = 10 },
+	HFOFreq     = { minimum = 5                          , maximum = 20                           , scale = 1 },
+	O2          = { minimum = 21                         , maximum = 100                          , scale = nil },
+	Flow        = { minimum = 1                          , maximum = 32                           , scale = 1000 },
+	RiseTime    = { minimum = 0.1                        , maximum = 2                            , scale = 1000 },
+	ITime       = { minimum = 1                          , maximum = 2                            , scale = 1000 },
+	ETime       = { minimum = 0.2                        , maximum = 30                           , scale = 1000 },
+	HFOPMean    = { minimum = 7                          , maximum = 50                           , scale = 10 },
+	VLimit      = { minimum = 1                          , maximum = 150                          , scale = 10 },
+	VGuarantee  = { minimum = 0.8                        , maximum = 60                           , scale = 10 },
+	AbortPSV    = { minimum = 1                          , maximum = 85                           , scale = nil },
+	TherapyFlow = { minimum = 0                          , maximum = 15                           , scale = 1000 },
+	Trigger     = { minimum = 1                          , maximum = 10                           , scale = 2580 },
+	FlowMin     = { minimum = 4                          , maximum = 16                           , scale = 1000 },
+	CPAP        = { minimum = 1                          , maximum = 30                           , scale = 10 },
+	PManuel     = { minimum = 1                          , maximum = 80                           , scale = 10 },
+	Backup      = { minimum = 0                          , maximum = 5                            , scale = nil },
+	ITimeRec    = { minimum = 2                          , maximum = 13                           , scale = 1000 },
+	ETimeRec    = { minimum = 0                          , maximum = 160                          , scale = 1000 },
+	O2Flush     = { minimum = 23                         , maximum = 100                          , scale = nil },
+	SPO2Low     = { minimum = 0                          , maximum = 98                           , scale = nil },
+	SPO2High    = { minimum = 1                          , maximum = 100                          , scale = nil },
+	FIO2High    = { minimum = 1                          , maximum = 100                          , scale = nil },
+	FIO2Low     = { minimum = 0                          , maximum = 98                           , scale = nil },
+	onOffState  = { minimum = pubFTI.onOffState.OFF      , maximum = pubFTI.onOffState.ON         , scale = nil },
+	VentRange   = { minimum = pubFTI.patientSize.NEONATAL, maximum = pubFTI.patientSize.PEDIATRIC , scale = nil },
+	}
+
 --------------------------------------------------------------------------------
 -- Publish Public Interface
 --------------------------------------------------------------------------------
-FTI = {
-    ventMode                             = ventMode                ,
-    ModeOption1                          = ModeOption1             ,
-    ModeOption2                          = ModeOption2             ,
+priFTI = {
     para_get_VentSettings                = para_get_VentSettings   ,
     para_set_settingData                 = para_set_settingData    ,
     para_measure_response                = para_measure_response   ,
     para_get_waveData                    = para_get_waveData       ,
     command                              = command                 ,
-    range                                = range                   ,
     measuredData_ScaleFactor             = measuredData_ScaleFactor,
+	errorValue                           = errorValue              ,
+	hfoFreqRecCondition                  = hfoFreqRecCondition     ,
+	continuousRespond                    = continuousRespond       ,
+	SOM                                  = SOM                     ,
+	def                                  = def                     ,
 }
+
+return priFTI
