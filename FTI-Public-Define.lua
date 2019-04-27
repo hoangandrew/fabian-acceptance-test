@@ -23,8 +23,8 @@ local ventMode = {
 
 --public
 local riseControl = {
-	 iFlow = 0,
-	 pressure = 1 
+     iFlow = 0,
+     pressure = 1 
 }
 
 
@@ -79,7 +79,6 @@ local ModeOption2 = {
 local patientSize = {
     NEONATAL               =     1,
     PEDIATRIC              =     2,
-	
 }
 
 local onOffState = {
@@ -87,16 +86,23 @@ local onOffState = {
     ON                     =     1,
 }
 
+local function delay_sec(xSecond)  
+    local clock = os.clock
+    local t0 = clock()
+    while (clock() - t0) <= xSecond do end
+end
+
 --------------------------------------------------------------------------------
 -- Publish Public Interface
 --------------------------------------------------------------------------------
 pubFTI = {
     ventMode                             = ventMode                ,
-	riseControl                          = riseControl             ,
+    riseControl                          = riseControl             ,
     ModeOption1                          = ModeOption1             ,
     ModeOption2                          = ModeOption2             ,
-	patientSize                          = patientSize             ,
-	onOffState                           = onOffState              ,
+    patientSize                          = patientSize             ,
+    onOffState                           = onOffState              ,
+    delay_sec                            = delay_sec              ,
 }
 
 return pubFTI
