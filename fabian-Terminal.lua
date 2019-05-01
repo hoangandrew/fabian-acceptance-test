@@ -466,61 +466,57 @@ end
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~GET VALUES~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-local function getContinuousData(xStartCmd, xStopCmd)
-   local cmdUsed,ventData = nil
-   if xStopCmd ~= nil then
-         writeToSerial(xStopCmd)
-         writeToSerial(xStartCmd)
-         cmdUsed,ventData = readVentBreath()
-         writeToSerial(xStopCmd)
+local function getBTB(xTimes)
+   local cmdUsed = nil
+   local ventData = {}
+   if xTimes ~= nil then
+         writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+         writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINIOUS_BTB)
+		 for i = 1, xTimes do
+             cmdUsed,ventData[i] = readVentBreath()
+		 end
+         writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
    else
-        writeToSerial(xStartCmd)
+        writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
         cmdUsed,ventData = readVentBreath()
    end
-   return cmdUsed,ventData
+   return ventData
 end
 
-local function getContinuousWave(xStartCmd, xStopCmd)
-   local cmdUsed,ventData = nil
-   if xStopCmd ~= nil then
-         writeToSerial(xStopCmd)
-         writeToSerial(xStartCmd)
-         cmdUsed,ventData = readVentWave()
-         writeToSerial(xStopCmd)
+local function getWave(xTimes)
+   local cmdUsed = nil
+   local ventData = { Flow = {}, Pressure = {}, etCO2 = {}}
+   local waveData
+   if xTimes ~= nil then
+         writeToSerial(cmd.TERM_STOP_WAVE_DATA)
+         writeToSerial(cmd.TERM_GET_WAVE_DATA)
+		 for i = 1, xTimes do
+             cmdUsed, waveData = readVentWave()
+			 ventData.Flow[i] = waveData.Flow
+			 ventData.Pressure[i] = waveData.Pressure
+			 ventData.etCO2[i] = waveData.etCO2
+		 end
+         writeToSerial(cmd.TERM_STOP_WAVE_DATA)
          dumpCmd,dumpData = readVentWave()
    end
-   return cmdUsed,ventData
+   return ventData
 end
 
-local function getBTB()
-    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
-    if (cmdUsed == cr.TERM_MEASUREMENTS_BTB) then
-        return breathData
-    end
-end
-
-local function getContinousBTB()
-    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_CONTINIOUS_BTB,cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
-    return breathData
-end
-
-local function getAVG()
-    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
-    if (cmdUsed == cr.TERM_MEASUREMENTS_AVG) then
-        return breathData
-    end
-end
-
-local function getContinousAVG()
-    local cmdUsed, breathData = getContinuousData(cmd.TERM_GET_MEASUREMENTS_CONTINUOUS_AVG, cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
-    if (cmdUsed == cr.TERM_MEASUREMENTS_AVG) then
-        return breathData
-    end
-end
-
-local function getContinousWaveData()
-    local cmdUsed, waveData = getContinuousWave(cmd.TERM_GET_WAVE_DATA, cmd.TERM_STOP_WAVE_DATA)
-    return waveData 
+local function getBTBAVG(xTimes)
+   local cmdUsed = nil
+   local ventData = {}
+   if xTimes ~= nil then
+         writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+         writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINUOUS_AVG)
+		 for i = 1, xTimes do
+             cmdUsed,ventData[i] = readVentBreath()
+		 end
+         writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
+   else
+        writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
+        cmdUsed,ventData = readVentBreath()
+   end
+   return ventData
 end
 
 local function getVentMode()
@@ -773,11 +769,8 @@ ft = {
     setStatePrico                   = setStatePrico,
     -------------------------GET FUNCTIONS-------------------------
     getBTB                          = getBTB,
-    getContinousBTB                 = getContinousBTB,
-    getAVG                          = getAVG,
-    getContinousAVG                 = getContinousAVG,
-    getContinousWaveData            = getContinousWaveData,
-    getWaveData                     = getWaveData,
+    getBTBAVG                       = getBTBAVG,
+    getWave                         = getWave,
     getVentMode                     = getVentMode,
     getModeOption1                  = getModeOption1,
     getModeOption2                  = getModeOption2,

@@ -6,9 +6,22 @@
 ------------------------------------------------------------------------------
 
 ft = require "fabian-Terminal"
+pubFTI = require "FTI-Public-Define"
 local portName = "COM6"
 
 ft.openCOM(portName)
+
+print (#pubFTI.flowTolerance__lpm)
+
+--[[
+local btbData = ft.getWave(1)
+print (btbData[1].Pressure)
+
+local ventdata = ft.getContinousWaveData(20)
+for i = 0, 20 do
+
+print('peakPressure = ' .. ventdata[i].Pressure)
+end]]
 
 --ft.setBPM(16)
 --ft.setIFlow__lpm(12)
@@ -102,14 +115,14 @@ end
 --ft.getContinousWaveData(100)
 ------------------------------
 -- Continuous Breath to Breath 
-
+--[[
 local breathData = ft.getContinousWaveData()
 for i = 0, 1000 do
     for k, v in pairs(breathData) do
 	    print(k .. " = " .. v)
     end
 end
-
+]]
 ------------------------------
 ------------------------------
 
