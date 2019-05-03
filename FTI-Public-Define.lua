@@ -86,10 +86,10 @@ local onOffState = {
     ON                     =     1,
 }
 
-local pressureTolerance__cmH2s = {Abs = 1  , percent = .03 }
-local flowTolerance__lpm       = {Abs = 0.5, percent = .10 }
-local volumeTolerance__ml      = {Abs = 0.5, percent = .10 }
-local rateTolerance__bpm       = {Abs = 1. , percent = 1   }
+local pressureTolerance__cmH2O = {absolute = 1  , percent = 3  }
+local flowTolerance__lpm       = {absolute = 0.5, percent = 10 }
+local volumeTolerance__ml      = {absolute = 0.5, percent = 10 }
+local rateTolerance__bpm       = {absolute = 1. , percent = 0  }
 
 local function delay_sec(xSecond)  
     local clock = os.clock
@@ -107,7 +107,7 @@ pubFTI = {
     ModeOption2                          = ModeOption2             ,
     patientSize                          = patientSize             ,
     onOffState                           = onOffState              ,
-	pressureTolerance__cmH2s             = pressureTolerance__cmH2s,
+	pressureTolerance__cmH2O             = pressureTolerance__cmH2O,
 	flowTolerance__lpm                   = flowTolerance__lpm      ,
 	volumeTolerance__ml                  = volumeTolerance__ml     ,
 	rateTolerance__bpm                  = rateTolerance__bpm      ,

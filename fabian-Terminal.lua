@@ -20,7 +20,7 @@ local hfrc    = priFTI.hfoFreqRecCondition
 local cr      = priFTI.continuousRespond
 local som     = priFTI.SOM
 local def     = priFTI.def
-local DEBUG   = false
+local DEBUG   = true
 -------------------------------
 local p, e, NBF, CMD = nil
 local timeout__ms = 2400
@@ -181,7 +181,6 @@ end
 local function readVentWave()
     local err, dataRead = p:read(read_len, timeout__ms)
     local wave = {}
-    printDebug(assert(err == rs232.RS232_ERR_NOERROR)) 
     if dataRead ~= nil then 
         printDebug(tohex(dataRead))
         wd = priFTI.para_get_waveData
@@ -466,6 +465,13 @@ end
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~GET VALUES~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+local function dumpWaveData()
+    dumpCmd, dumpData = readVentWave()
+    while dumpData ~= nil do
+	 dumpCmd, dumpData = readVentWave()
+		printDebug ("dumping data")
+	end
+end
 local function getBTB(xTimes)
    local cmdUsed = nil
    local ventData = {}
@@ -480,6 +486,7 @@ local function getBTB(xTimes)
         writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
         cmdUsed,ventData = readVentBreath()
    end
+   dumpWaveData()
    return ventData
 end
 
@@ -497,8 +504,8 @@ local function getWave(xTimes)
 			 ventData.etCO2[i] = waveData.etCO2
 		 end
          writeToSerial(cmd.TERM_STOP_WAVE_DATA)
-         dumpCmd,dumpData = readVentWave()
    end
+   dumpWaveData()
    return ventData
 end
 
@@ -516,6 +523,7 @@ local function getBTBAVG(xTimes)
         writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
         cmdUsed,ventData = readVentBreath()
    end
+   dumpWaveData()
    return ventData
 end
 
