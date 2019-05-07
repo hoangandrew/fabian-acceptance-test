@@ -17,7 +17,7 @@ ft.openCOM(portName)
 
 print('fabian-regression-hfo-single-limb-test: ')
 
-ft.initalizeVent()
+
 local function testNCPAP()
     print('Test Manual Breath in NCPAP mode:')
 	
@@ -85,9 +85,33 @@ local function testDUOPAP()
     ft.delay_sec(30) 
     
     print('------------- step 21 ---------------')
-    -- need verify alarm activation
+    print('INTERACTIVE: Check that no active alarms are active.')
+	pass = promptYesNoInput()
+	checkToContinue(pass)
     verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
 	verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
+	print('------------- step 103 ---------------')
+	ft.setITime__sec(0.15)
+    print('INTERACTIVE: Check that I-Time says "end of range" under the value.')
+	pass = promptYesNoInput()
+	checkToContinue(pass)
+	print('------------- step 104 ---------------')
+	ft.setBPM__bpm(2) 
+	ft.setITime__sec(15)
+    print('INTERACTIVE: Check that T-HIGH says "end of range" under the value.')
+	pass = promptYesNoInput()
+	checkToContinue(pass)
+	print('------------- step 105 ---------------')
+	ft.setITime__sec(0.15)
+	print('------------- step 106 ---------------')
+    print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
+	pass = promptYesNoInput()
+	checkToContinue(pass)
+	print('------------- step 107 ---------------')
+	ft.setBPM__bpm(60) 
+    print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
+	pass = promptYesNoInput()
+	checkToContinue(pass)
 	print("DUOPAP test PASSED")
 end
 
@@ -95,8 +119,10 @@ end
 ---------------------------------------------------------------------
 -- function call
 ---------------------------------------------------------------------
+ft.initalizeVent()
 testNCPAP()
 testO2Therapy()
 testDUOPAP()
+
 
 ft.closeCOM()

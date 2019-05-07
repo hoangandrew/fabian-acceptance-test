@@ -71,7 +71,6 @@ local function EXPECT_GREATER(xActual, xExpected, xTolerance)
 end
 
 local function EXPECT_EQ_SET(xActual, xExpected, xTolerance)
-
         for j = 1, #xActual do
 		print("expect eq SET actual = " .. xActual[j])
 		 end
@@ -80,10 +79,15 @@ local function EXPECT_EQ_SET(xActual, xExpected, xTolerance)
 	end
 end
 
+local function EXPECT_COMPARE(xActual, xExpected)
+    assert(xActual ~= xExpected,'ASSERT: not Equal' .. ' Expected: ' .. xExpected .. ' Actual: ' .. xActual)
+end
+
 verify = {
-    EXPECT_EQ     = EXPECT_EQ,
-	EXPECT_TRUE   = EXPECT_TRUE,
-	EXPECT_EQ_SET = EXPECT_EQ_SET,
+    EXPECT_EQ      = EXPECT_EQ,
+	EXPECT_TRUE    = EXPECT_TRUE,
+	EXPECT_EQ_SET  = EXPECT_EQ_SET,
+	EXPECT_COMPARE = EXPECT_COMPARE,
 }
 
 

@@ -20,10 +20,10 @@ local hfrc    = priFTI.hfoFreqRecCondition
 local cr      = priFTI.continuousRespond
 local som     = priFTI.SOM
 local def     = priFTI.def
-local DEBUG   = true
+local DEBUG   = false
 -------------------------------
 local p, e, NBF, CMD = nil
-local timeout__ms = 2400
+local timeout__ms = 400
 local read_len = 63 -- read one byte
 
 -- passes in a string and makes it into a string hex
@@ -718,8 +718,10 @@ end
 local function initalizeVent()
     setVetRunState(0)
     setVetRunState(1)
+	setStateVLimit(0)
+	setStateVGuarantee(0)
     writeToSerial(cmd.TERM_STOP_WAVE_DATA)
-    writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
+    writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
 end
 -----------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------

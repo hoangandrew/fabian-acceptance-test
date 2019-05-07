@@ -7,12 +7,20 @@
 
 ft = require "fabian-Terminal"
 pubFTI = require "FTI-Public-Define"
+verify = require "verify"
 local portName = "COM6"
 
 ft.openCOM(portName)
 
-print (#pubFTI.flowTolerance__lpm)
-
+--ft.setVentMode(pubFTI.ventMode.IPPV)
+    --ft.setIFlow__lpm(8)
+	--ft.setPeep__mbar(5)
+	--ft.setPInsPressure__mbar(20)
+	ft.setBPM__bpm(30)
+	ft.setETime__sec(8)
+	--ft.setITime__sec(1)
+	--ft.setO2(21)
+	--
 --[[
 local btbData = ft.getWave(1)
 print (btbData[1].Pressure)
