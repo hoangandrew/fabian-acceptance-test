@@ -13,10 +13,11 @@ utility = require "utility"
 local portName = "COM6"
 local on = pubFTI.onOffState.ON
 local off = pubFTI.onOffState.OFF
-local interactive = false
+local isInteractive = false
 ft.openCOM(portName)
 
-print('fabian-regression-hfo-single-limb-test: ')
+
+print('fabian-regression-hfo-single-limb-test: (' .. os.date() ..  ')')
 
 
 local function testNCPAP()
@@ -83,17 +84,17 @@ local function testDUOPAP()
     ft.setBPM__bpm(40) 
     
     print('------------- step 20 ---------------')
-   -- ft.delay_sec(30) 
+    ft.delay_sec(30) 
     
     print('------------- step 21 ---------------')
-	if interactive then
+	if isInteractive then
         print('INTERACTIVE: Check that no active alarms are active.')
 	    pass = utility.promptYesNoInput()
 	    utility.checkToContinue(pass)
 	end
-   -- verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
-	--verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
-	if interactive then  
+    verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
+	verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
+	if isInteractive then  
 		print('------------- step 103 ---------------')
 		ft.setITime__sec(0.15)
         print('INTERACTIVE: Check that I-Time says "end of range" under the value.')
@@ -124,9 +125,9 @@ end
 ---------------------------------------------------------------------
 -- function call
 ---------------------------------------------------------------------
---ft.initalizeVent()
---testNCPAP()
---testO2Therapy()
+ft.initalizeVent()
+testNCPAP()
+testO2Therapy()
 testDUOPAP()
 
 
