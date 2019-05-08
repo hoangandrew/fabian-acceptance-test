@@ -65,8 +65,8 @@ local function testO2Therapy()
     
     print('------------- step 18 ---------------')
     verify.EXPECT_EQ(ft.getBTB().expFlow, 10, pubFTI.flowTolerance__lpm)
-    verify.EXPECT_EQ_SET(ft.getWave(1).Pressure , 10, pubFTI.pressureTolerance__cmH2O)
-    verify.EXPECT_EQ_SET(ft.getWave(1).Pressure , 10, pubFTI.pressureTolerance__cmH2O)
+    verify.EXPECT_EQ_SET(ft.getWave(10).Pressure , 8, pubFTI.pressureTolerance__cmH2O)
+    verify.EXPECT_EQ_SET(ft.getWave(10).Pressure , 8, pubFTI.pressureTolerance__cmH2O)
 
 	print("02 Therapy test PASSED")
 end
@@ -109,9 +109,11 @@ local function testDUOPAP()
 	checkToContinue(pass)
 	print('------------- step 107 ---------------')
 	ft.setBPM__bpm(60) 
+	--[[
     print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
 	pass = promptYesNoInput()
 	checkToContinue(pass)
+	]]
 	print("DUOPAP test PASSED")
 end
 
