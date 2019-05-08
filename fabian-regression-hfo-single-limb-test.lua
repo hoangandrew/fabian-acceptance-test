@@ -8,11 +8,12 @@
 ft     = require "fabian-Terminal"
 pubFTI = require "FTI-Public-Define"
 verify = require "verify"
+utility = require "utility"
 
 local portName = "COM6"
 local on = pubFTI.onOffState.ON
 local off = pubFTI.onOffState.OFF
-
+local interactive = false
 ft.openCOM(portName)
 
 print('fabian-regression-hfo-single-limb-test: ')
@@ -82,38 +83,40 @@ local function testDUOPAP()
     ft.setBPM__bpm(40) 
     
     print('------------- step 20 ---------------')
-    ft.delay_sec(30) 
+   -- ft.delay_sec(30) 
     
     print('------------- step 21 ---------------')
-    print('INTERACTIVE: Check that no active alarms are active.')
-	pass = promptYesNoInput()
-	checkToContinue(pass)
-    verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
-	verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
-	print('------------- step 103 ---------------')
-	ft.setITime__sec(0.15)
-    print('INTERACTIVE: Check that I-Time says "end of range" under the value.')
-	pass = promptYesNoInput()
-	checkToContinue(pass)
-	print('------------- step 104 ---------------')
-	ft.setBPM__bpm(2) 
-	ft.setITime__sec(15)
-    print('INTERACTIVE: Check that T-HIGH says "end of range" under the value.')
-	pass = promptYesNoInput()
-	checkToContinue(pass)
-	print('------------- step 105 ---------------')
-	ft.setITime__sec(0.15)
-	print('------------- step 106 ---------------')
-    print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
-	pass = promptYesNoInput()
-	checkToContinue(pass)
-	print('------------- step 107 ---------------')
-	ft.setBPM__bpm(60) 
-	--[[
-    print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
-	pass = promptYesNoInput()
-	checkToContinue(pass)
-	]]
+	if interactive then
+        print('INTERACTIVE: Check that no active alarms are active.')
+	    pass = utility.promptYesNoInput()
+	    utility.checkToContinue(pass)
+	end
+   -- verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
+	--verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
+	if interactive then  
+		print('------------- step 103 ---------------')
+		ft.setITime__sec(0.15)
+        print('INTERACTIVE: Check that I-Time says "end of range" under the value.')
+	    pass = utility.promptYesNoInput()
+	    utility.checkToContinue(pass)
+	    print('------------- step 104 ---------------')
+	    ft.setBPM__bpm(2) 
+	    ft.setITime__sec(15)
+        print('INTERACTIVE: Check that T-HIGH says "end of range" under the value.')
+	    pass = utility.promptYesNoInput()
+	    utility.checkToContinue(pass)
+	    print('------------- step 105 ---------------')
+	    ft.setITime__sec(0.15)
+	    print('------------- step 106 ---------------')
+        print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
+	    pass = utility.promptYesNoInput()
+	    utility.checkToContinue(pass)
+	    print('------------- step 107 ---------------')
+	    ft.setBPM__bpm(60) 
+        print('INTERACTIVE: Check that Frequency says "end of range" under the value.')
+	    utility.pass = promptYesNoInput()
+	   utility. checkToContinue(pass)
+	end
 	print("DUOPAP test PASSED")
 end
 
@@ -121,9 +124,9 @@ end
 ---------------------------------------------------------------------
 -- function call
 ---------------------------------------------------------------------
-ft.initalizeVent()
-testNCPAP()
-testO2Therapy()
+--ft.initalizeVent()
+--testNCPAP()
+--testO2Therapy()
 testDUOPAP()
 
 
