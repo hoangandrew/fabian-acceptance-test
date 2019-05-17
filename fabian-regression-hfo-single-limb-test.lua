@@ -5,20 +5,17 @@
 -- Tests fabian Terminal Interface library
 ------------------------------------------------------------------------------
 
-ft     = require "fabian-Terminal"
-pubFTI = require "FTI-Public-Define"
-verify = require "verify"
+ft      = require "fabian-Terminal"
+pubFTI  = require "FTI-Public-Define"
+verify  = require "verify"
 utility = require "utility"
 
-local portName = "COM6"
-local on = pubFTI.onOffState.ON
-local off = pubFTI.onOffState.OFF
+local portName      = "COM6"
+local on            = pubFTI.onOffState.ON
+local off           = pubFTI.onOffState.OFF
 local isInteractive = false
-ft.openCOM(portName)
-
 
 print('fabian-regression-hfo-single-limb-test: (' .. os.date() ..  ')')
-
 
 local function testNCPAP()
     print('Test Manual Breath in NCPAP mode:')
@@ -125,6 +122,7 @@ end
 ---------------------------------------------------------------------
 -- function call
 ---------------------------------------------------------------------
+ft.openCOM(portName)
 ft.initalizeVent()
 testNCPAP()
 testO2Therapy()

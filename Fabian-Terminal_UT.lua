@@ -11,35 +11,28 @@ verify = require "verify"
 local portName = "COM6"
 
 ft.openCOM(portName)
-
---ft.setVentMode(pubFTI.ventMode.IPPV)
-    --ft.setIFlow__lpm(8)
-	--ft.setPeep__mbar(5)
-	--ft.setPInsPressure__mbar(20)
-	ft.setBPM__bpm(30)
-	ft.setETime__sec(8)
-	--ft.setITime__sec(1)
-	--ft.setO2(21)
-	--
+--print(ft.getContWave().Pressure)
 --[[
-local btbData = ft.getWave(1)
-print (btbData[1].Pressure)
-
-local ventdata = ft.getContinousWaveData(20)
-for i = 0, 20 do
-
-print('peakPressure = ' .. ventdata[i].Pressure)
-end]]
-
+ ft.setIFlow__lpm(8)
+	ft.setITime__sec(1)
+	ft.setPeep__mbar(5)
+	ft.setPInsPressure__mbar(20)
+	ft.setETime__sec(8) --e-time must be before freq, not sure why
+	ft.setBPM__bpm(30)
+	ft.setVGuarantee__ml(2)
+	ft.setO2(30)
+	ft.delay_sec(3)
+	ft.setStateVGuarantee(0)
+]]
 --ft.setBPM(16)
 --ft.setIFlow__lpm(12)
---ft.setO2(21)
+--ft.setO2(40)
 --ft.setPeep__mbar(4)
 --ft.setPInsPressure__mbar(12)
 --ft.setStateVGuarantee(1)
 --ft.setStateVLimit(1)
 --ft.setVetRunState(1)
---ft.setVentMode(3)
+--ft.setVentMode(pubFTI.ventMode.NCPAP)
 --ft.setPSV__mbar(6)
 --ft.setStatePressureRiseControl(0) --0=i-flow 1=risetime 
 --ft.setStateBodyWeightRange(0) --1 or 2
@@ -63,7 +56,7 @@ end]]
 --ft.setTherapyFlow__lpm(5)
 --ft.setTrigger(3)                                         
 --ft.setFlowMin__lpm(9) --cpap
---ft.setCPAP__mbar(6) 
+ft.setCPAP__mbar(6) 
 --ft.setPManuel__mbar(12)
 --ft.setBackup(0)
 --ft.setITimeRec__sec(10)
@@ -86,10 +79,12 @@ end]]
 ------ Breath to Breath ------
 --[[
 local breathData = ft.getBTB()
+i = 0
  for k, v in pairs(breathData) do
-	print(k .. " = " .. v)
+	print(i.. " " .. k .. " = " .. v)
+	i = i + 1
 end
- ]]
+]]
 ------------------------------
 ------------------------------
 
@@ -170,7 +165,7 @@ end
 --print(ft.getTherapyFlow())
 --print(ft.getTrigger())
 --print(ft.getFlowMin())
---print(ft.getCPAP())
+print(ft.getCPAP())
 --print(ft.getPManuel())
 --print(ft.getBackup())
 --print(ft.getITimeRec())--hfo

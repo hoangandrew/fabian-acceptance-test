@@ -13,13 +13,7 @@ local function EXPECT_TRUE(xExpected, xMsg)
 end
 
 local function EXPECT_EQ(xActual, xExpected, xTolerance)  
-    local absolute = 0
-	local percent  = 0
-	if xTolerance ~= nil then
-	    absolute = xTolerance.absolute ~= nil and xTolerance.absolute or 0
-		percent  = xTolerance.percent ~= nil and xTolerance.percent or 0
-	end
-	local tolValue = absolute + (xExpected * percent / 100)
+	local tolValue = xTolerance.absolute + (xExpected * (xTolerance.percent / 100))
 	local minimum  = xExpected - tolValue
 	local maximum  = xExpected + tolValue
 	print(tolValue,xActual, minimum, maximum,xTolerance.absolute)
@@ -71,9 +65,6 @@ local function EXPECT_GREATER(xActual, xExpected, xTolerance)
 end
 
 local function EXPECT_EQ_SET(xActual, xExpected, xTolerance)
-        for j = 1, #xActual do
-		print("expect eq SET actual = " .. xActual[j])
-		 end
 	for i = 1, #xActual do
 		EXPECT_EQ(xActual[i], xExpected, xTolerance)
 	end

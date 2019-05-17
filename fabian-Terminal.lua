@@ -139,7 +139,6 @@ local function readVentBreath()
     local err, dataRead = p:read(read_len, timeout__ms)
     local breathData = {}
     printDebug(tohex(dataRead))
-    printDebug(assert(err == rs232.RS232_ERR_NOERROR)) 
     if dataRead ~= nil then
         cmdRead = getByteValue(dataRead,3)
         breathData.mode                     = getByteValue(dataRead,      mr.ActiveVentMode)
@@ -236,10 +235,10 @@ local function writingToSerial(xCommand, xDef)
     if xDef.scale ~= nil then 
         scaledData = data / xDef.scale
     end
-    if cmdUsed == xCommand and scaledData >= xDef.minimum and scaledData <= xDef.minimum then
+    if cmdUsed == xCommand and scaledData >= xDef.minimum and scaledData <= xDef.maximum then
         return scaledData
     else 
-        print("An error has occured")
+        print("An error has occured " ..cmdUsed .. " " .. xCommand .. " " .. scaledData .. " " .. xDef.minimum)
     end
     if (DEBUG ~= false) then print(scaledData) end 
 end
@@ -509,6 +508,12 @@ local function getWave(xTimes)
    return ventData
 end
 
+local function getContWave()
+    local cmdUsed, waveData = writeToSerial(cmd.TERM_GET_WAVE_DATA)
+	return waveData
+end
+
+
 local function getBTBAVG(xTimes)
    local cmdUsed = nil
    local ventData = {}
@@ -720,6 +725,7 @@ local function initalizeVent()
     setVetRunState(1)
 	setStateVLimit(0)
 	setStateVGuarantee(0)
+	setO2(21)
     writeToSerial(cmd.TERM_STOP_WAVE_DATA)
     writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
 end
@@ -781,6 +787,7 @@ ft = {
     getBTB                          = getBTB,
     getBTBAVG                       = getBTBAVG,
     getWave                         = getWave,
+	getContWave                     = getContWave,
     getVentMode                     = getVentMode,
     getModeOption1                  = getModeOption1,
     getModeOption2                  = getModeOption2,

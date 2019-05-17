@@ -90,6 +90,7 @@ local pressureTolerance__cmH2O = {absolute = 1  , percent = 3  }
 local flowTolerance__lpm       = {absolute = 0.5, percent = 10 }
 local volumeTolerance__ml      = {absolute = 0.5, percent = 10 }
 local rateTolerance__bpm       = {absolute = 1. , percent = 0  }
+local oxygen                   = {absolute = 0 , percent = 3  }
 
 local function delay_sec(xSecond)  
     local clock = os.clock
@@ -110,7 +111,8 @@ pubFTI = {
 	pressureTolerance__cmH2O             = pressureTolerance__cmH2O,
 	flowTolerance__lpm                   = flowTolerance__lpm      ,
 	volumeTolerance__ml                  = volumeTolerance__ml     ,
-	rateTolerance__bpm                  = rateTolerance__bpm      ,
+	rateTolerance__bpm                   = rateTolerance__bpm      ,
+	oxygen                               = oxygen                  ,
     delay_sec                            = delay_sec               ,
 }
 

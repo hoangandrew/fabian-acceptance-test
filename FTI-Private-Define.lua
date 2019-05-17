@@ -214,7 +214,7 @@ local def = {
     BPM         = { minimum = 2                          , maximum = 200                           , scale = 1    },
     Flow        = { minimum = 1                          , maximum = 32                           , scale = 1000 },
     RiseTime    = { minimum = 0.1                        , maximum = 2                            , scale = 1000 },
-    ITime       = { minimum = 0.15                       , maximum = 15                            , scale = 1000 },
+    ITime       = { minimum = 0.10                       , maximum = 15                            , scale = 1000 },
     ETime       = { minimum = 0.2                        , maximum = 30                           , scale = 1000 },
     HFOPMean    = { minimum = 7                          , maximum = 50                           , scale = 10   },
     VLimit      = { minimum = 1                          , maximum = 150                          , scale = 10   },
