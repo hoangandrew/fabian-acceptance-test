@@ -238,7 +238,9 @@ local function writingToSerial(xCommand, xDef)
     if cmdUsed == xCommand and scaledData >= xDef.minimum and scaledData <= xDef.maximum then
         return scaledData
     else 
-        print("An error has occured " ..cmdUsed .. " " .. xCommand .. " " .. scaledData .. " " .. xDef.minimum)
+        print("An ERROR has occured:")
+		print("command used = " .. xCommand .. " vs. Command recieved = " .. cmdUsed)
+		print("data recieved = " .. scaledData .. " vs. Minimum = " .. " " ..xDef.minimum .. " Maximum = " .. xDef.maximum)
     end
     if (DEBUG ~= false) then print(scaledData) end 
 end
@@ -478,8 +480,10 @@ local function getBTB(xTimes)
          writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
          writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINIOUS_BTB)
 		 for i = 1, xTimes do
-             cmdUsed,ventData[i] = readVentBreath()
-		 end
+			 while ventData[i] == nil do
+			     cmdUsed,ventData[i] = readVentBreath()
+			 end
+ 		 end
          writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
    else
         writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_BTB)
@@ -509,8 +513,15 @@ local function getWave(xTimes)
 end
 
 local function getContWave()
-    local cmdUsed, waveData = writeToSerial(cmd.TERM_GET_WAVE_DATA)
-	return waveData
+    writeToSerial(cmd.TERM_GET_WAVE_DATA)
+    local cmdUsed, waveData = readVentWave()
+	while (true) do
+	    cmdUsed, waveData = readVentWave()
+		print ("Flow = ".. waveData.Flow)
+		print ("Pressure = ".. waveData.Pressure)
+	    print ("Volume = ".. waveData.etCO2)
+		end
+	
 end
 
 
@@ -521,8 +532,10 @@ local function getBTBAVG(xTimes)
          writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
          writeToSerial(cmd.TERM_GET_MEASUREMENTS_CONTINUOUS_AVG)
 		 for i = 1, xTimes do
-             cmdUsed,ventData[i] = readVentBreath()
-		 end
+			 while ventData[i] == nil do
+			     cmdUsed,ventData[i] = readVentBreath()
+			 end
+ 		 end
          writeToSerial(cmd.TERM_STOP_CONTINUOUS_MEASUREMENTS)
    else
         writeToSerial(cmd.TERM_GET_MEASUREMENTS_ONCE_AVG)
@@ -720,6 +733,10 @@ local function getPRICO()
     return writingToSerial(vs.TERMINAL_GET_STATE_PRICO,def.onOffState)
 end
 
+local function getAlarm()
+    return writingToSerial(vs.TERMINAL_GET_PARAM_ALARM,def.Alarm)
+end
+
 local function initalizeVent()
     setVetRunState(0)
     setVetRunState(1)
@@ -833,7 +850,7 @@ ft = {
     getSPO2High                     = getSPO2High,
     getFIO2High                     = getFIO2High,
     getPRICO                        = getPRICO,
-
+    getAlarm                        = getAlarm,
 }
 
 return ft

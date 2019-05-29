@@ -51,6 +51,7 @@ local para_get_VentSettings = {
     TERMINAL_GET_PARAM_FIO2LOW           = 0x31,
     TERMINAL_GET_PARAM_FIO2HIGH          = 0x32,
     TERMINAL_GET_STATE_PRICO             = 0x33,
+	TERMINAL_GET_PARAM_ALARM             = 0x40
 }
 
 local para_set_settingData = {
@@ -166,7 +167,7 @@ local measuredData_ScaleFactor = {
     TriggerVolumeFlow          = 10,
     HFOAmp                     = 10,
     FIO2                       = 10,
-    etCO2                      = 100,
+    etCO2                      = 10, --100
     InspTimePSV                = 1000,
     MinuteVolume               = 1000,
     Flow                       = 1000,
@@ -214,7 +215,7 @@ local def = {
     BPM         = { minimum = 2                          , maximum = 200                           , scale = 1    },
     Flow        = { minimum = 1                          , maximum = 32                           , scale = 1000 },
     RiseTime    = { minimum = 0.1                        , maximum = 2                            , scale = 1000 },
-    ITime       = { minimum = 0.10                       , maximum = 15                            , scale = 1000 },
+    ITime       = { minimum = 0.1                       , maximum = 15                            , scale = 1000 },
     ETime       = { minimum = 0.2                        , maximum = 30                           , scale = 1000 },
     HFOPMean    = { minimum = 7                          , maximum = 50                           , scale = 10   },
     VLimit      = { minimum = 1                          , maximum = 150                          , scale = 10   },
@@ -235,7 +236,8 @@ local def = {
     FIO2Low     = { minimum = 0                          , maximum = 98                           , scale = nil  },
     onOffState  = { minimum = pubFTI.onOffState.OFF      , maximum = pubFTI.onOffState.ON         , scale = nil  },
     VentRange   = { minimum = pubFTI.patientSize.NEONATAL, maximum = pubFTI.patientSize.PEDIATRIC , scale = nil  },
-    }
+    Alarm       = { minimum = 0                          , maximum = 69                           , scale = nil  },
+	}
 
 --------------------------------------------------------------------------------
 -- Publish Public Interface

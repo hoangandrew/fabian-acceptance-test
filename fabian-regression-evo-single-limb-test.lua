@@ -20,29 +20,29 @@ print('fabian-regression-hfo-single-limb-test: (' .. os.date() ..  ')')
 local function testNCPAP()
     print('Test Manual Breath in NCPAP mode:')
 	
-    print('------------- step 11 ---------------')
+    print('------------- step 12 ---------------')
     ft.setVentMode(pubFTI.ventMode.NCPAP)
     ft.setCPAP__mbar(5) 
     ft.setPManuel__mbar(15)
     ft.delay_sec(10)
     
-    print('------------- step 12 ---------------')
+    print('------------- step 13 ---------------')
     ft.setManBreathRunning(on)
     ft.delay_sec(3)
     
-    print('------------- step 13 ---------------')
+    print('------------- step 14 ---------------')
     local wavePres15 = ft.getWave(1)
     ft.setManBreathRunning(off)
 	local wavePres5 = ft.getWave(1)
 	verify.EXPECT_EQ_SET(wavePres15.Pressure, 15, pubFTI.pressureTolerance__cmH2O)
 	verify.EXPECT_EQ_SET(wavePres5.Pressure, 5, pubFTI.pressureTolerance__cmH2O)
 	
-    print('------------- step 14 ---------------')
+    print('------------- step 15 ---------------')
     for i = 1, 6 do
         ft.setManBreathRunning(on)
         ft.delay_sec(1)
         if i == 1 then 
-        print('------------- step 15 ---------------')
+        print('------------- step 16 ---------------')
          end
 		verify.EXPECT_EQ_SET(ft.getWave(10).Pressure, 15, pubFTI.pressureTolerance__cmH2O)
         ft.setManBreathRunning(off)
@@ -55,23 +55,23 @@ end
 
 local function testO2Therapy()
     print('Test Flow in O2 Therapy mode:')
-    print('------------- step 16 ---------------')
+    print('------------- step 17 ---------------')
     ft.setVentMode(pubFTI.ventMode.O2Therapy)
     ft.setTherapyFlow__lpm(10)
     
-    print('------------- step 17 ---------------')
+    print('------------- step 18 ---------------')
     ft.delay_sec(30)
     
-    print('------------- step 18 ---------------')
+    print('------------- step 19 ---------------')
     verify.EXPECT_EQ(ft.getBTB().expFlow, 10, pubFTI.flowTolerance__lpm)
-    verify.EXPECT_EQ_SET(ft.getWave(10).Pressure , 8.2, pubFTI.pressureTolerance__cmH2O)
+    verify.EXPECT_EQ_SET(ft.getWave(10).Pressure , 4.4, pubFTI.pressureTolerance__cmH2O)
    
 	print("02 Therapy test PASSED")
 end
 
 local function testDUOPAP()
     print('Test Waveform Pressure and Monitor Pressure in DUOPAP mode:')
-    print('------------- step 19 ---------------')
+    print('------------- step 20 ---------------')
     local isPEEP_5_mBar = false
     ft.setVentMode(pubFTI.ventMode.DUOPAP)
     ft.setCPAP__mbar(5)
@@ -79,12 +79,12 @@ local function testDUOPAP()
     ft.setITime__sec(0.5)
     ft.setBPM__bpm(40) 
     
-    print('------------- step 20 ---------------')
+    print('------------- step 21 ---------------')
     ft.delay_sec(30) 
     
-    print('------------- step 21 ---------------')
+    print('------------- step 22 ---------------')
     print('Checking that no active alarms are active.')
-    utility.isAlarmActive(pubFTI.alarm.AL_NONE)
+	utility.isAlarmActive(pubFTI.alarm.AL_NONE)
     verify.EXPECT_EQ(ft.getBTB().PEEP, 5, pubFTI.pressureTolerance__cmH2O)
 	verify.EXPECT_EQ(ft.getBTB().peakPressure, 15, pubFTI.pressureTolerance__cmH2O)
 	if isInteractive then  
@@ -120,9 +120,9 @@ end
 ---------------------------------------------------------------------
 ft.openCOM(portName)
 ft.initalizeVent()
-testNCPAP()
+--testNCPAP()
 testO2Therapy()
-testDUOPAP()
+--testDUOPAP()
 
 
 ft.closeCOM()

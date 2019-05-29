@@ -30,11 +30,19 @@ local function checkToContinue(xPass)
 	end
 end
 
+local function isAlarmActive(xExpected)
+    while (ft.getAlarm() ~= xExpected) do
+		ft.delay_sec(1)
+		
+    end
+end
+
 utility = 
 {
 promptYesNoInput  = promptYesNoInput,
 promptForContinue = promptForContinue,
 checkToContinue   = checkToContinue,
+isAlarmActive     = isAlarmActive,
 }
 
 return utility
